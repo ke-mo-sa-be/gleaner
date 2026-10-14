@@ -1,0 +1,11 @@
+data/
+output/
+__pycache__/
+*.pyc
+*.xlsx
+*.db
+*.db-wal
+*.db-shm
+.venv/
+build/
+dist/

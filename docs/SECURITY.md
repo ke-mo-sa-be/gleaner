@@ -1,0 +1,108 @@
+# Security Guidelines
+
+Gleaner is a single-user local desktop app. The main risks are (1) harming or being banned by the
+sites we collect from, (2) mishandling personal data of the people in the collected lists, and
+(3) leaking anything sensitive from the PC.
+
+## 1. Authentication
+
+Authentication Provider: None. The Windows user account is the boundary.
+Website sign-in: The app never automates logins and never stores website passwords. If a team member
+has a legitimate account on a site, they may sign in by hand inside the app's browser; the session
+cookie lives in the app's browser profile under `%LOCALAPPDATA%\Gleaner\browser\`.
+
+## 2. Authorization
+
+Roles: none in MVP (single user). Owner approval of new sites is an open question (PRD 12).
+
+## 3. Site Safety Rules (non-negotiable)
+
+These are product requirements, not settings. They are enforced in `core/fetcher.py` only.
+- One request at a time per app instance.
+- Random delay between requests, default 5-10 s; hard floor 3 s.
+- robots.txt fetched and obeyed for every host; disallowed URL = stop.
+- Block signals stop the run with no retry: HTTP 401/403/407/429/503, Cloudflare challenge or ban pages
+  (`cf-chl-`, `error code: 1006`/`1015`), CAPTCHA/"access denied" pages, 3 blank pages in a row.
+- Never: proxies, VPN switching, IP rotation, user-agent rotation to evade detection, CAPTCHA solving,
+  headless-detection evasion, or retrying after a block.
+- The User-Agent includes the token `Gleaner` so site owners can identify the tool.
+- A recipe whose last run was blocked requires explicit confirmation to run again (UX Flow 5).
+
+## 4. Secrets
+
+- Never hard-code credentials
+- Never commit production secrets
+- Never expose private secrets
+- MVP has no secrets. Future AI key: stored in Windows Credential Manager via `keyring`, never in
+  files, recipes, logs or the database.
+- Rotate compromised credentials
+
+## 5. Environment Variables
+
+Public: `GLEANER_HOME` (optional override of the data folder, for tests/dev)
+Private: none in MVP
+
+## 6. Input Safety
+
+- Start URLs must be `http`/`https`. `file:`, `javascript:` and local network addresses
+  (localhost, 127.0.0.0/8, 10/8, 172.16/12, 192.168/16) are rejected, except in tests via an explicit
+  flag.
+- Recipe JSON is validated against the schema before use; unknown keys rejected.
+- Collected HTML is never rendered in the app's own UI as HTML (only as plain text in tables).
+- `picker.js` runs inside the page's context and must not send page data anywhere except the app over
+  QWebChannel.
+
+## 7. Data Protection (personal data - DPDP Act 2023)
+
+Sensitive data: names, phone numbers, emails and addresses of individual doctors and staff.
+- Data minimisation: the builder warns when a field name or value looks like date of birth, Aadhaar,
+  PAN, bank or card numbers, and such fields are excluded unless the Owner explicitly keeps them.
+- Storage: local only (`%LOCALAPPDATA%\Gleaner\`, `Documents\Gleaner\`). No cloud sync.
+- Retention: "Delete recipe data" removes records and cached pages for a recipe. Recommended policy:
+  delete raw cache 90 days after export (Owner to confirm).
+- Deletion requests: Library has "Find & delete person" (by phone/email) across records - Nice to Have.
+- Use: exports carry a note in the Run Log sheet: "Personal data - scrub against DND before calls/SMS,
+  include opt-out, delete on request."
+
+## 8. Logging
+
+Never log:
+- Passwords, cookies, API keys, tokens
+- Collected personal data (names, phones, emails, addresses)
+
+Log:
+- Run start/stop/outcome, counts, URLs fetched (URLs may contain names in slugs; logs are local only)
+- Block signals with status code and marker
+- Errors with stack traces (log file only, never in the UI)
+
+Log location: `%LOCALAPPDATA%\Gleaner\logs\`, rotated at 5 MB x 5 files.
+
+## 9. File Handling
+
+- The app reads only its own data folder and recipe JSON files the user imports.
+- Imported recipe files: `.json`, max 1 MB, validated before use.
+- Exports: `.xlsx` only, written to the exports folder; never overwrite an existing file.
+
+## 10. Security Checklist
+
+- [ ] Site safety rules enforced and covered by tests
+- [ ] No credentials stored by the app
+- [ ] Recipe and URL input validated
+- [ ] Personal data not logged
+- [ ] Sensitive-field warning in builder
+- [ ] Errors in UI do not expose stack traces
+- [ ] Dependencies pinned and reviewed (requirements.txt)
+
+## 11. Speed presets
+
+Users choose Gentle (10-20 s), Normal (5-10 s, default) or Faster (3-5 s) between requests, in Settings or
+per run. Presets are defined only in `core/fetcher.py` (`SPEEDS`); every preset is at or above the 3 s floor,
+and a test enforces it. There is no custom value field.
+
+## 12. Updates
+
+- The update check only reads version information (GitHub latest release or a `latest.json` manifest);
+  it never downloads or runs anything by itself. The user clicks Download and runs the installer.
+- Remote manifests and installer links must be https; shared-folder paths are allowed.
+- The GitHub source must be a public repository. No token is ever stored in the app.
+- Failures at start-up are silent; Check now shows a plain-language reason.

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "name": "drdata.in doctors",
+  "start_url": "https://www.drdata.in/list-doctors.php?search=Doctor&specialization=Radiologist",
+  "render_js": false,
+  "list": {
+    "item_selector": "#no-more-tables tbody tr",
+    "fields": [
+      {"name": "Name", "selector": "td[data-title=\"Name\"]", "attr": "text", "type": "text", "required": true},
+      {"name": "Specialization", "selector": "td[data-title=\"Special.\"]", "attr": "text", "type": "text"},
+      {"name": "Degree", "selector": "td[data-title=\"Degree\"]", "attr": "text", "type": "text"},
+      {"name": "State", "selector": "td[data-title=\"State\"]", "attr": "text", "type": "text"},
+      {"name": "City", "selector": "td[data-title=\"City\"]", "attr": "text", "type": "text"},
+      {"name": "Profile", "selector": "a", "attr": "href", "type": "link"}
+    ]
+  },
+  "pagination": {"type": "page_param", "param": "page", "start": 1, "max_pages": 0},
+  "detail": {
+    "link_field": "Profile",
+    "fields": [
+      {"name": "Clinic / Hospital", "label": "Clinic/ Hospital Name", "label_scope": "#profile table tr", "type": "text"},
+      {"name": "Address", "label": "Address", "label_scope": "#profile table tr", "type": "text"},
+      {"name": "Pincode", "label": "Address", "label_scope": "#profile table tr", "type": "pincode"},
+      {"name": "Area", "label": "Geographical Area", "label_scope": "#profile table tr", "type": "text"},
+      {"name": "District", "label": "District", "label_scope": "#profile table tr", "type": "text"},
+      {"name": "Phone", "label": "Phone Number", "label_scope": "#profile table tr", "type": "phone", "required": true},
+      {"name": "Medical Council", "label": "Name of Medical Council", "label_scope": "#profile table tr", "type": "text"},
+      {"name": "Registration No", "label": "Registration Number", "label_scope": "#profile table tr", "type": "text"},
+      {"name": "Practicing Since", "label": "Practicing Since", "label_scope": "#profile table tr", "type": "number"}
+    ]
+  },
+  "dedup_keys": ["Name", "Phone"],
+  "limits": {"max_records": 0}
+}

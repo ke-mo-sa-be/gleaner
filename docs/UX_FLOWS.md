@@ -1,0 +1,116 @@
+# UX Flows
+
+All messages shown to users are plain language. No stack traces, HTTP jargon or selector syntax in the
+main UI (technical details go to a collapsible "Details" area and the log file).
+
+## Flow 1 - Build a recipe (list page only)
+
+1. User clicks **New Recipe** in the Library.
+2. Dialog asks for a recipe name and start URL. User clicks **Open**.
+3. App checks robots.txt for the URL.
+   - Disallowed: message "This site asks robots not to collect this page. Gleaner won't collect
+     it." The recipe cannot be saved.
+4. Page loads in the built-in browser (left). Field panel on the right is empty.
+5. User clicks **+ Add list field**. Cursor changes; hovering outlines elements.
+6. User clicks an example (e.g. a business name).
+7. App highlights every matching element and shows "15 items found on this page".
+8. Panel shows a new field row: name box (focused), type dropdown (Text), Required checkbox.
+9. If the match is wrong, user clicks another example of the same field: app recalculates.
+   User can also click **Clear picks** on that field.
+10. User repeats 5-9 for other fields.
+11. Preview table (bottom) fills with up to 10 rows.
+12. User clicks **Save**.
+
+Success: Recipe appears in Library with "Never run".
+Failure: Clicked element matches nothing repeated - message "This looks like a single item, not a list.
+Pick it as a page field instead?" with Yes/No.
+
+Loading State: Browser shows a spinner; field picking disabled until the page finishes loading.
+Error State: Page fails to load - "Couldn't open this page. Check the address and your internet."
+Empty State: Field panel shows "Click + Add list field, then click an example on the page."
+
+## Flow 2 - Add pagination
+
+1. In the builder, user clicks **Mark next page**.
+2. User clicks the site's "Next" (or "2") link/button.
+3. App follows it, checks the same fields match on page 2, and shows "Page 2 found - 15 items".
+4. Pagination row in the panel shows a green tick.
+
+Failure: Next page has no matching items - "Page 2 looks different. Try clicking the Next button
+again." Pagination not saved.
+
+## Flow 3 - Add detail page fields
+
+1. User clicks **Mark item link** and clicks the link/button that opens one item's page.
+2. App opens that item's detail page in the browser. Panel switches to a "Detail page" section.
+3. User clicks **+ Add item field**, clicks a value on the page (e.g. the phone number next to
+   "Phone Number"), names it, sets its type.
+4. Where the page uses label/value rows, the field is found by its label (Found column shows
+   "next to 'Phone Number'"), so it still works when rows shift between profiles.
+5. User clicks **Back to list**. **Preview item pages** fills item columns for the first 3 rows
+   (fetched politely).
+6. User saves. Gleaner fetches the start page once without the browser; if no items are found that way
+   (the site builds its list with JavaScript), it explains that the site isn't supported yet and does not
+   save.
+
+## Flow 4 - Run a recipe
+
+1. User selects a recipe in the Library and clicks **Run**.
+2. Run dialog: optional limits (max pages, max records). **Start**.
+3. Run view shows: status, pages done, records collected, current page, elapsed, estimated time left,
+   and a live log in plain language ("Collected record 41 (page 3)").
+4. User can **Pause** (finishes the current request then waits), **Resume**, **Stop**.
+5. When done: banner "Done - 1,240 records. 1,120 ready, 120 need review." with **Open Excel** and
+   **Open folder**.
+
+Loading State: Progress bar indeterminate until the first listing page is read.
+Error State: see Flow 5 and Flow 6.
+Empty State: "No items found on the start page. The site may have changed. Edit the recipe."
+
+## Flow 5 - Site blocks the run
+
+1. Runner detects a block signal.
+2. Run stops at once. No retry.
+3. Red banner: "The site stopped responding to us normally (it may have blocked this PC). The run has
+   been stopped. Don't run this recipe again today. Tell your manager." **Details** shows the signal.
+4. Excel is still written with what was collected.
+5. Library shows a red "Blocked" badge on the recipe. Next Run asks: "Last run was blocked on <date>.
+   Run anyway?" (default No).
+
+## Flow 6 - Resume after interruption
+
+1. App closed, crashed, or PC restarted mid-run.
+2. User opens the app; Library shows the recipe with "Stopped - 640 records".
+3. User clicks **Run**. App says "Continuing from where it stopped" and skips cached pages.
+
+## Flow 7 - Export again
+
+1. User selects a recipe and clicks **Export**.
+2. App writes a new timestamped workbook from stored data (no network) and opens the folder.
+
+## Flow 8 - Change theme, speed or folders
+
+1. User opens **Settings**.
+2. **Theme**: Match Windows / Light / Dark. Applies at once; Match Windows follows Windows when it switches.
+3. **Collection speed**: Gentle / Normal / Faster, each with its trade-off in one sentence. This is the
+   default for new runs; the Run screen has a Speed box to change it for one run.
+4. **Where your files are**: Excel folder (Change..., Open) and data folder (Open).
+
+## Flow 9 - Learn to build a recipe
+
+1. First start: Library shows "New to Gleaner? The 5-minute guide walks you through your first recipe."
+   with **Open the guide** and **Hide**. Either choice stops the tip from showing again (Settings can bring
+   it back).
+2. **Guide** screen: chapter list on the left, chapter text on the right.
+3. In the builder, the **Steps** box ticks off: open the list page, add a list field, (optional) next page,
+   (optional) item link + item fields, save. **How does this work?** opens the tutorial chapter.
+
+## Flow 10 - Update to a new version
+
+1. Gleaner starts and quietly checks the update source (if enabled in Settings).
+2. Newer version found: Library banner "Gleaner 0.5.0 is available" with **Download** / **Later**.
+   No message when there is no update or the PC is offline.
+3. **Download** opens the installer link in the browser (or the installer in the shared folder).
+4. User closes Gleaner and runs the installer; it replaces the program and keeps recipes, data and Excel
+   files.
+5. **Settings > Updates > Check now** does the same on demand and explains problems in plain language.
