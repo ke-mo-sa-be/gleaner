@@ -15,7 +15,8 @@ The usual day looks like this:
 2. **Run**: watch it work. You can pause, stop, and continue later.
 3. Open the Excel file it made.
 
-Making a new recipe takes about 10-15 minutes the first time. The next chapters show how, step by step.
+Making a new recipe takes about 10-15 minutes the first time, often less with **Auto-detect**. The next
+chapters show how, step by step.
 
 ## The three kinds of page
 
@@ -51,6 +52,13 @@ Tip: what you see now is where every run will start. If you want shops in Pune o
 
 **Step 2 - Pick the values you want from the list**
 
+Quickest way: click **Auto-detect**. Gleaner finds the repeating list, proposes its fields with column
+names, finds the link to each item's own page and the next-page link. Check the **Preview** at the bottom,
+remove fields you don't need (select, **Remove field**) and rename columns. Anything that looks like a date
+of birth, ID or bank detail is left out automatically.
+
+If Auto-detect picks the wrong list or misses a value, pick by hand:
+
 1. Click **+ Add list field**. The mouse becomes a cross.
 2. Click on one shop's **name**. Every shop's name lights up in orange, and the field appears in the
    **Fields** table with "15 of 15 items" (or similar).
@@ -66,8 +74,9 @@ The **Preview** at the bottom shows the first 10 rows exactly as they will appea
 
 1. On the list page, click **Mark item link**, then click the link or button that opens one shop
    ("View", "Details", the shop's name, ...).
-2. Gleaner opens that shop's page. Now click **+ Add item field** and click a value, for example the
-   phone number.
+2. Gleaner opens that shop's page. Click **Auto-detect** again: it proposes every "label: value" pair on
+   the page (Phone, Address, Email, ...). Or click **+ Add item field** and click a value, for example
+   the phone number.
 3. If the page shows details as label and value ("Phone: 98450 00000"), the **Found** column says
    "next to 'Phone'". That is good: it will work for every shop even if their pages are laid out a little
    differently.
@@ -96,17 +105,22 @@ Some websites make you go through several layers before you reach a list, for ex
 > State > City > Category > list of shops > one shop's page
 
 Gleaner follows **two** of those layers automatically: the **list** (with all its pages) and each
-**item page**. For the layers above the list (state, city, category) do this:
+**item page**. For the layers above the list (state, city, category) use **start pages**: one recipe that
+starts at several lists.
 
 1. In the builder, click through the site's layers yourself (choose the state, then the city, then the
-   category) until you see the list.
-2. Build the recipe there (Steps 2-5 above). The recipe starts from exactly that list.
-3. For the next city or category: in the **Library**, select the recipe and click **Duplicate**, then
-   **Edit**. Go to the other city's list in the built-in browser and click **Save recipe**. All your
-   fields and settings are kept; only the starting list changes. Rename it, e.g. "Shops - Mumbai".
+   category) until you see the list. Build the recipe there (Steps 2-5 above).
+2. Under **Start pages**, click **+ Add this page**.
+3. In the built-in browser, go to the next city's (or category's) list and click **+ Add this page**
+   again. Repeat for every list you want.
+4. Or click **Paste addresses...** and paste many list addresses at once, one per line. Handy when the
+   address only changes in one place, for example `...?city=Pune`, `...?city=Mumbai`, `...?city=Delhi`.
+5. **Save recipe**. A run goes through every start page, with all their pages and item pages.
 
-Tip: if the site's address bar changes when you pick a city (for example `...?city=Pune` becomes
-`...?city=Mumbai`), you can also just type the new address in **Website address** after duplicating.
+The Excel file has a **Start Page** column, so you can see which city or category each row came from.
+
+If you prefer separate files per city, you can still **Duplicate** a recipe in the Library and change its
+start page.
 
 Many sites also have one long list of everything (for example "All shops") with a filter on the side.
 That single list is often the quickest recipe: one recipe instead of one per city.
@@ -146,6 +160,21 @@ Every run writes a new Excel file (older files are never overwritten). It has th
 - **Run Log**: when each run happened and how it ended.
 
 Mark a field as **Required** in the builder if a row is useless without it (often the phone number).
+
+## One master list from several recipes
+
+**Library > Master list...** combines the results of the recipes you tick into one Excel file:
+
+- **Master**: every row once, with a **Recipe** column saying where it came from.
+- **Needs Review**: rows with problems, and rows whose phone number (or email, when there is no phone)
+  already appeared in another recipe ("duplicate of Shops Pune R-00012").
+- **Sources**: how many rows each recipe contributed and when it last ran.
+
+## Sharing recipes with colleagues
+
+Select a recipe in the **Library** and click **Share recipe...** to save it as a small file. Send the file
+(email, chat, shared folder). Your colleague clicks **Import recipe...** in their Library. Only the recipe is
+shared, never the collected data.
 
 Excel files go to **Documents\Gleaner** unless you choose another folder in **Settings**.
 

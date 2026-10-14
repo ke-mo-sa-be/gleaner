@@ -5,13 +5,15 @@ from urllib.parse import urlsplit
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import (QAbstractItemView, QFileDialog, QHBoxLayout, QHeaderView, QMessageBox,
+from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout,
+                               QHeaderView, QListWidget, QListWidgetItem, QMessageBox,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from app import settings, style
 from app.tasks import friendly_error, run_task, with_store
 from app.widgets import Banner, button, label, open_path
-from core.export import export_workbook
+from core.export import export_workbook, safe_stem
+from core.master import export_master
 from core.recipe import RecipeError, load_recipe
 
 STATUS_LABELS = {  # status -> (text, colour key in app.style)
@@ -25,6 +27,40 @@ STATUS_LABELS = {  # status -> (text, colour key in app.style)
     "network_error": ("Network problem", "WARNING"),
     "no_items": ("No items found", "WARNING"),
 }
+
+
+def _master(store, recipe_ids, folder):
+    sources = [(store.get_recipe(i), store.records(i), store.last_run(i)) for i in recipe_ids]
+    return export_master(folder, sources)
+
+
+class MasterDialog(QDialog):
+    """Pick the recipes to combine into one master list."""
+
+    def __init__(self, rows, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Master list")
+        self.setMinimumWidth(460)
+        layout = QVBoxLayout(self)
+        layout.addWidget(label("Combine these recipes into one Excel file. The same phone number (or email) found "
+                               "in several recipes is kept once; the others go to Needs Review.", wrap=True))
+        self.list = QListWidget()
+        for row in rows:
+            item = QListWidgetItem(f"{row['name']}  ({row['record_count']:,} records)")
+            item.setData(Qt.ItemDataRole.UserRole, row["id"])
+            item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
+            item.setCheckState(Qt.CheckState.Checked if row["record_count"] else Qt.CheckState.Unchecked)
+            self.list.addItem(item)
+        layout.addWidget(self.list)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.button(QDialogButtonBox.StandardButton.Ok).setText("Create Excel")
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def selected_ids(self):
+        return [self.list.item(i).data(Qt.ItemDataRole.UserRole) for i in range(self.list.count())
+                if self.list.item(i).checkState() == Qt.CheckState.Checked]
 
 
 def _export(store, recipe_id, folder):
@@ -54,9 +90,12 @@ class LibraryView(QWidget):
         self.edit_btn = button("Edit")
         self.dup_btn = button("Duplicate")
         self.export_btn = button("Export to Excel")
-        self.import_btn = button("Import file...")
+        self.import_btn = button("Import recipe...")
+        self.share_btn = button("Share recipe...", tooltip="Save this recipe as a file a colleague can import")
+        self.master_btn = button("Master list...", tooltip="All recipes in one Excel file, duplicates removed")
         self.delete_btn = button("Delete", "danger")
-        for b in (self.new_btn, self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.import_btn):
+        for b in (self.new_btn, self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.master_btn,
+                  self.share_btn, self.import_btn):
             bar.addWidget(b)
         bar.addStretch(1)
         bar.addWidget(self.delete_btn)
@@ -92,6 +131,8 @@ class LibraryView(QWidget):
         self.dup_btn.clicked.connect(self._duplicate)
         self.export_btn.clicked.connect(self._export)
         self.import_btn.clicked.connect(self._import)
+        self.share_btn.clicked.connect(self._share)
+        self.master_btn.clicked.connect(self._choose_master)
         self.delete_btn.clicked.connect(self._delete)
         style.theme_changed.changed.connect(self.refresh)
         self.refresh()
@@ -137,7 +178,8 @@ class LibraryView(QWidget):
 
     def _update_buttons(self):
         has = self.selected_id() is not None
-        for b in (self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.delete_btn):
+        self.master_btn.setEnabled(bool(self.rows))
+        for b in (self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.share_btn, self.delete_btn):
             b.setEnabled(has)
 
     def _edit(self):
@@ -170,6 +212,40 @@ class LibraryView(QWidget):
         self.banner.show_message("success", f"Excel written: {ready:,} ready, {review:,} need review.", str(path),
                                  [("Open Excel", lambda: open_path(path)),
                                   ("Open folder", lambda: open_path(path.parent))])
+
+    def _choose_master(self):
+        dialog = MasterDialog(self.rows, self)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            self.create_master(dialog.selected_ids())
+
+    def create_master(self, recipe_ids):
+        if not recipe_ids:
+            self.banner.show_message("warning", "Tick at least one recipe for the master list.")
+            return
+        self.banner.show_message("info", "Writing the master list...")
+        run_task(with_store(_master), recipe_ids, settings.exports_dir(), on_done=self._master_written,
+                 on_failed=lambda msg: self.banner.show_message("error", "Couldn't write the master list.", msg))
+
+    def _master_written(self, result):
+        path, n_master, n_review = result
+        self.banner.show_message("success", f"Master list written: {n_master:,} rows, {n_review:,} need review.",
+                                 str(path), [("Open Excel", lambda: open_path(path)),
+                                             ("Open folder", lambda: open_path(path.parent))])
+
+    def _share(self):
+        recipe = self.store.get_recipe(self.selected_id())
+        path, _ = QFileDialog.getSaveFileName(self, "Share recipe", f"{safe_stem(recipe.name)}.json",
+                                              "Recipe files (*.json)")
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as fh:
+                fh.write(recipe.to_json())
+        except OSError as exc:
+            self.banner.show_message("error", "Couldn't save the recipe file.", str(exc))
+            return
+        self.banner.show_message("success", "Recipe saved. Send the file to a colleague; they click "
+                                            "Import recipe... in their Library.", path)
 
     def _import(self):
         path, _ = QFileDialog.getOpenFileName(self, "Import recipe", "", "Recipe files (*.json)")

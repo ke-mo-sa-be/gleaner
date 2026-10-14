@@ -218,6 +218,209 @@
     return { type: "next", pagination };
   }
 
+  // ---- auto-detect (no AI: structure heuristics) -------------------------------------------
+
+  const NOT_FIELD_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG", "BUTTON", "INPUT", "SELECT", "TEXTAREA",
+    "IFRAME", "OPTION", "TEMPLATE"]);
+  const NEXT_TEXT = /^(next|next page|more|older|›|»|>|>>|→)(\s*[›»>→])?$/i;
+
+  function ownText(el) {
+    return [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim().length > 0);
+  }
+
+  function leaves(item) {
+    return [item, ...item.querySelectorAll("*")].filter(
+      (el) => !NOT_FIELD_TAGS.has(el.tagName) && !el.closest("button") && ownText(el));
+  }
+
+  // The repeated group of elements that looks most like a listing. Long runs of single short links
+  // (city lists, menus, footers) score low: score grows with text per item and fields per item.
+  function bestList() {
+    let best = null;
+    const parents = new Set();
+    for (const el of document.body.querySelectorAll("*")) {
+      if (el.parentElement && !(layer && layer.contains(el))) parents.add(el.parentElement);
+    }
+    for (const parent of parents) {
+      const groups = new Map();
+      for (const child of parent.children) {
+        if (SKIP_ITEM_TAGS.has(child.tagName) || NOT_FIELD_TAGS.has(child.tagName)) continue;
+        const key = child.tagName + "|" + (goodClasses(child)[0] || "");
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(child);
+      }
+      for (const items of groups.values()) {
+        const withText = items.filter((it) => text(it).length > 0);
+        if (withText.length < 3) continue;
+        const avg = withText.reduce((a, it) => a + text(it).length, 0) / withText.length;
+        const probe = withText.slice(0, 5);
+        const leafAvg = probe.reduce((a, it) => a + leaves(it).length, 0) / probe.length;
+        // Menus, city lists, footers: (nearly) every value in the item is a link.
+        const probeLeaves = probe.flatMap((it) => leaves(it));
+        const linkShare = probeLeaves.length
+          ? probeLeaves.filter((el) => el.closest("a")).length / probeLeaves.length : 0;
+        const inChrome = items[0].closest("nav, header, footer, form, [role=navigation], [role=menu]");
+        // List items share their inner layout; page sections (div.row, panels) don't.
+        const shapes = probe.map((it) => new Set(leaves(it).map((l) => relSteps(it, l).join(" "))));
+        let similarity = 0;
+        for (const shape of shapes.slice(1)) {
+          const common = [...shape].filter((x) => shapes[0].has(x)).length;
+          similarity += common / Math.max(1, new Set([...shape, ...shapes[0]]).size);
+        }
+        similarity = shapes.length > 1 ? similarity / (shapes.length - 1) : 0;
+        const tooBig = leafAvg > 25 || avg > 1500;
+        const score = Math.sqrt(withText.length) * Math.min(avg, 300) * Math.min(leafAvg, 8) ** 2
+          * similarity ** 2 * (linkShare > 0.8 ? 0.05 : 1) * (inChrome ? 0.05 : 1) * (tooBig ? 0.1 : 1);
+        if (!best || score > best.score) best = { items: withText, score };
+      }
+    }
+    return best;
+  }
+
+  function prettify(name) {
+    const words = name.replace(/[_-]+/g, " ").replace(/([a-z])([A-Z])/g, "$1 $2").trim().toLowerCase();
+    return words ? words[0].toUpperCase() + words.slice(1) : "";
+  }
+
+  function headerFor(item, leaf) {
+    if (item.tagName !== "TR") return null;
+    const cell = leaf.closest("td, th");
+    const table = item.closest("table");
+    if (!cell || !table) return null;
+    const head = table.querySelector("thead tr") || [...table.querySelectorAll("tr")].find((r) => r.querySelector("th"));
+    if (!head || head === item) return null;
+    const index = [...item.children].indexOf(cell);
+    const th = head.children[index];
+    return th ? text(th) || null : null;
+  }
+
+  // A name the page itself gives the value (data-title, itemprop, table heading), or null.
+  function pageName(item, leaf) {
+    for (let el = leaf; el && el !== item.parentElement; el = el.parentElement) {
+      const key = ATTR_KEYS.find((k) => el.getAttribute(k));
+      if (key) return el.getAttribute(key);
+    }
+    return headerFor(item, leaf);
+  }
+
+  function fieldName(item, leaf) {
+    const given = pageName(item, leaf);
+    if (given) return given;
+    for (let el = leaf; el && el !== item; el = el.parentElement) {
+      const cls = goodClasses(el)[0];
+      if (cls) return prettify(cls);
+    }
+    return null;
+  }
+
+  function autoList() {
+    const best = bestList();
+    if (!best) return { type: "error", message: "Couldn't find a repeating list on this page. Pick the fields by hand." };
+    const items = best.items;
+    const itemSelector = itemSelectorFor(items[0]);
+    const sample = items.slice(0, 20);
+    const byPath = new Map();
+    sample.forEach((item) => {
+      const used = new Set();
+      for (const leaf of leaves(item)) {
+        const steps = relSteps(item, leaf);
+        const selector = toRel(steps);
+        if (used.has(selector)) continue;
+        used.add(selector);
+        if (!byPath.has(selector)) byPath.set(selector, { selector, steps, count: 0, values: [], first: leaf, item });
+        const entry = byPath.get(selector);
+        entry.count += 1;
+        entry.values.push(text(leaf).slice(0, 80));
+      }
+    });
+    const minCount = Math.max(2, Math.ceil(sample.length / 2));
+    const fields = [...byPath.values()]
+      // Same text in every item is usually a label ("Phone:", "View"), unless the page names the column.
+      .filter((e) => e.count >= minCount && (new Set(e.values).size > 1 || pageName(e.item, e.first)))
+      .sort((a, b) => (a.first.compareDocumentPosition(b.first) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1))
+      .slice(0, 12)
+      .map((e) => ({ selector: e.selector, steps: e.steps, name: fieldName(e.item, e.first),
+                     samples: e.values.slice(0, 3), count: e.count }));
+
+    const links = new Map();
+    sample.forEach((item) => {
+      for (const a of item.querySelectorAll("a[href]")) {
+        const href = a.href;
+        if (!/^https?:/i.test(href) || href.split("#")[0] === location.href.split("#")[0]) continue;
+        const steps = relSteps(item, a);
+        const selector = toRel(steps);
+        if (!links.has(selector)) links.set(selector, { selector, steps, hrefs: [] });
+        links.get(selector).hrefs.push(href);
+      }
+    });
+    const link = [...links.values()]
+      .filter((l) => l.hrefs.length >= minCount && new Set(l.hrefs).size >= Math.min(l.hrefs.length, 2))
+      .sort((a, b) => new Set(b.hrefs).size - new Set(a.hrefs).size)[0] || null;
+
+    let pagination = null;
+    const cur = new URL(location.href);
+    const candidates = [...document.querySelectorAll("a[href]")].filter((a) => !items.some((it) => it.contains(a)));
+    // "2" (current page + 1) beats a "Next" label: on some sites Next jumps a whole block of pages.
+    const nextLink = candidates.find((a) => (a.getAttribute("rel") || "").split(/\s+/).includes("next"))
+      || candidates.find((a) => {
+        const n = parseInt(text(a), 10);
+        if (String(n) !== text(a)) return false;
+        const target = new URL(a.getAttribute("href"), location.href);
+        return [...target.searchParams].some(([k, v]) => v === String(n)
+          && n === parseInt(cur.searchParams.get(k) || "1", 10) + 1);
+      })
+      || candidates.find((a) => NEXT_TEXT.test(text(a)));
+    if (nextLink) {
+      const res = nextFor(nextLink);
+      if (res.type === "next") pagination = res.pagination;
+    }
+
+    highlight(items);
+    return {
+      type: "auto", itemSelector, items: document.querySelectorAll(itemSelector).length, fields,
+      link: link ? { selector: link.selector, steps: link.steps, samples: link.hrefs.slice(0, 2) } : null,
+      pagination,
+    };
+  }
+
+  function autoDetail() {
+    const fields = [];
+    const labels = new Set();
+    const consider = (valueEl) => {
+      if (valueEl.closest("form, nav, footer")) return;  // contact forms and menus are not item data
+      const lab = labelFor(valueEl);
+      const value = text(valueEl);
+      if (!lab || !value || value.length > 500 || labels.has(lab.label.toLowerCase())) return;
+      if (!/^[\p{L}\p{N}]/u.test(lab.label)) return;
+      if (value.toLowerCase() === lab.label.toLowerCase()) return;
+      labels.add(lab.label.toLowerCase());
+      fields.push({ label: lab.label, label_scope: lab.label_scope, sample: value.slice(0, 80) });
+    };
+    document.querySelectorAll("dt").forEach((dt) => {
+      const dd = dt.nextElementSibling;
+      if (dd && dd.tagName === "DD") consider(dd);
+    });
+    document.querySelectorAll("tr, li, div, p").forEach((row) => {
+      if (layer && layer.contains(row)) return;
+      const kids = [...row.children];
+      if (kids.length < 2 || kids.length > 4 || kids[1].children.length > 8) return;
+      const lab = text(kids[0]);
+      if (lab && lab.length <= 40) consider(kids[1]);
+    });
+    highlight([]);
+    return fields.length
+      ? { type: "auto-detail", fields: fields.slice(0, 25) }
+      : { type: "error", message: "Couldn't find label and value pairs on this page. Pick the values by hand." };
+  }
+
+  function autoDetect(kind) {
+    try {
+      return kind === "detail" ? autoDetail() : autoList();
+    } catch (err) {
+      return { type: "error", message: "Auto-detect failed (" + err.message + "). Pick the fields by hand." };
+    }
+  }
+
   // ---- click handling ----------------------------------------------------------------------
 
   function handle(el) {
@@ -301,6 +504,7 @@
     },
     stop,
     handle,
+    autoDetect,
     show(itemSelector, selector) {
       try {
         highlight(selector === undefined ? [...document.querySelectorAll(itemSelector)] : matchesFor(itemSelector, selector));

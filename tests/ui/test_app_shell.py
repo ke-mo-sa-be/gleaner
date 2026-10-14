@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -85,6 +86,34 @@ class ShellTests(unittest.TestCase):
         self.assertGreaterEqual(len(titles), 8)
         for key, prefix in help_view.KEYS.items():
             self.assertTrue(any(t.startswith(prefix) for t in titles), key)
+
+    def wait(self, condition, timeout=10):
+        import time
+        end = time.monotonic() + timeout
+        while time.monotonic() < end and not condition():
+            QCoreApplication.processEvents()
+            time.sleep(0.02)
+        return condition()
+
+    def test_master_list_and_share(self):
+        w = MainWindow(self.store, check_updates=False)
+        rid = self.store.save_recipe(load_recipe(DRDATA))
+        self.store.save_record(rid, "https://www.drdata.in/a", {"Name": "Test Person", "Phone": "98450 00001",
+                                                                "_start_page": "https://www.drdata.in/"})
+        w.library.refresh()
+        w.library.create_master([rid])
+        self.assertTrue(self.wait(lambda: "Master list written" in w.library.banner.title.text()),
+                        w.library.banner.title.text())
+        self.assertTrue(any(p.name.startswith("Master_list_") for p in settings.exports_dir().iterdir()))
+
+        w.library.table.selectRow(0)
+        target = Path(self.tmp.name) / "shared.json"
+        with mock.patch("app.library_view.QFileDialog.getSaveFileName", return_value=(str(target), "")):
+            w.library._share()
+        self.assertEqual(load_recipe(target).name, "drdata.in doctors")
+        style.theme_changed.changed.disconnect(w.library.refresh)
+        w.deleteLater()
+        QCoreApplication.processEvents()
 
     def test_main_window_sections_and_help_routing(self):
         w = MainWindow(self.store, check_updates=False)

@@ -101,12 +101,27 @@ class _Crawl:
         return bool(self.max_records) and self.records >= self.max_records
 
     def run(self) -> str:
-        url = self.recipe.start_url
+        starts = self.recipe.start_pages()
         seen = set()
+        items_found = 0
+        for number, start in enumerate(starts, 1):
+            if len(starts) > 1:
+                self.emit("info", f"Start page {number} of {len(starts)}.", start)
+            found, stop = self.crawl_from(start, seen)
+            items_found += found
+            if stop:
+                return "done"
+        return "done" if items_found else "no_items"
+
+    def crawl_from(self, start: str, seen: set) -> tuple[int, bool]:
+        """List pages from one start page. Returns (items found, whether a run limit was reached)."""
+        url = start
+        pages_here = 0  # page numbering restarts for each start page
+        items_found = 0
         previous_signature = None
         while url and url not in seen:
             if self.max_pages and self.pages >= self.max_pages:
-                break
+                return items_found, True
             seen.add(url)
             html = self.fetch(url)
             if html is None:
@@ -114,33 +129,36 @@ class _Crawl:
                 break
             items = extract_list(html, self.recipe, url)
             self.pages += 1
+            pages_here += 1
             if not items:
-                if self.pages == 1:
-                    return "no_items"
+                if pages_here == 1:
+                    self.emit("info", "No items found on this start page.", url)
                 break
             # Some sites answer an out-of-range page number with the last (or first) page again.
             signature = tuple(sorted((k, v) for k, v in items[0].items() if v))
             if signature == previous_signature:
                 break
             previous_signature = signature
+            items_found += len(items)
             self.emit("page", f"Reading page {self.pages} ({len(items)} items).", url)
 
             for index, item in enumerate(items):
                 if self.limit_reached():
-                    return "done"
-                self.collect(item, index, url)
+                    return items_found, True
+                self.collect(item, index, url, start)
             if self.limit_reached():
-                return "done"
-            url = next_page_url(html, self.recipe, url, self.pages)
-        return "done"
+                return items_found, True
+            url = next_page_url(html, self.recipe, url, pages_here)
+        return items_found, False
 
-    def collect(self, item: dict, index: int, page_url: str):
+    def collect(self, item: dict, index: int, page_url: str, start: str):
         detail = self.recipe.detail
         link = item.get(detail.link_field) if detail else None
         key = link if link else f"{page_url}#item{index}"
         if self.store.has_record(self.recipe_id, key):
             return
         data = dict(item)
+        data["_start_page"] = start
         if detail and link:
             html = self.fetch(link)
             if html is None:

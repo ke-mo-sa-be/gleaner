@@ -12,8 +12,9 @@ RECIPE_VERSION = 1
 FIELD_TYPES = ("text", "link", "phone", "email", "pincode", "number")
 PAGINATION_TYPES = ("none", "next_link", "page_param")
 MAX_RECIPE_FILE_BYTES = 1_000_000
+MAX_START_PAGES = 500
 
-TOP_KEYS = ("version", "name", "start_url", "render_js", "list", "pagination", "detail", "dedup_keys", "limits")
+TOP_KEYS = ("version", "name", "start_url", "start_urls", "render_js", "list", "pagination", "detail", "dedup_keys", "limits")
 LIST_KEYS = ("item_selector", "fields")
 FIELD_KEYS = ("name", "selector", "attr", "type", "required", "label", "label_scope")
 PAGINATION_KEYS = ("type", "selector", "text", "param", "start", "max_pages")
@@ -66,6 +67,11 @@ class Recipe:
     max_records: int = 0
     render_js: bool = False
     version: int = RECIPE_VERSION
+    # Several start pages (e.g. one per city). Empty = just start_url. When set, they replace start_url.
+    start_urls: list[str] = field(default_factory=list)
+
+    def start_pages(self) -> list[str]:
+        return list(self.start_urls) if self.start_urls else [self.start_url]
 
     def all_fields(self) -> list[Field]:
         return self.list_fields + (self.detail.fields if self.detail else [])
@@ -74,13 +80,15 @@ class Recipe:
         out = {
             "version": self.version,
             "name": self.name,
-            "start_url": self.start_url,
+            "start_url": self.start_pages()[0],
             "render_js": self.render_js,
             "list": {"item_selector": self.item_selector, "fields": [_field_dict(f) for f in self.list_fields]},
             "pagination": _drop_none(asdict(self.pagination)),
             "dedup_keys": list(self.dedup_keys),
             "limits": {"max_records": self.max_records},
         }
+        if self.start_urls:
+            out["start_urls"] = list(self.start_urls)
         if self.detail:
             out["detail"] = {
                 "link_field": self.detail.link_field,
@@ -143,10 +151,14 @@ def from_dict(data: dict) -> Recipe:
         detail = Detail(link_field=d.get("link_field", ""), fields=_parse_fields(d.get("fields"), "detail.fields", problems))
     if problems:
         raise RecipeError(problems)
+    start_urls = top.get("start_urls") or []
+    if not isinstance(start_urls, list) or not all(isinstance(u, str) for u in start_urls):
+        raise RecipeError(["start_urls must be a list of addresses"])
     try:
         return Recipe(
             name=str(top.get("name", "")),
-            start_url=str(top.get("start_url", "")),
+            start_url=str(top.get("start_url") or (start_urls[0] if start_urls else "")),
+            start_urls=list(start_urls),
             item_selector=str(lst.get("item_selector", "")),
             list_fields=list_fields,
             pagination=Pagination(**pag),
@@ -211,9 +223,15 @@ def validate(recipe: Recipe, allow_local=False) -> None:
     problems = []
     if not recipe.name.strip():
         problems.append("name is empty")
-    url_problem = check_url(recipe.start_url, allow_local)
-    if url_problem:
-        problems.append(f"start_url: {url_problem}")
+    pages = recipe.start_pages()
+    for url in pages:
+        url_problem = check_url(url, allow_local)
+        if url_problem:
+            problems.append(f"start page {url!r}: {url_problem}")
+    if len(set(pages)) != len(pages):
+        problems.append("the same start page is listed twice")
+    if len(pages) > MAX_START_PAGES:
+        problems.append(f"more than {MAX_START_PAGES} start pages")
     if not recipe.item_selector.strip():
         problems.append("list.item_selector is empty")
     else:

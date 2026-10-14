@@ -60,7 +60,8 @@ class BuildRowsTests(unittest.TestCase):
 
     def test_columns(self):
         self.assertEqual(columns_for(recipe()),
-                         ["Record ID", "Name", "Phone", "Email", "Pincode", "Source URL", "Collected On", "Issues"])
+                         ["Record ID", "Name", "Phone", "Email", "Pincode", "Source URL", "Start Page", "Collected On",
+                          "Issues"])
 
 
 if __name__ == "__main__":

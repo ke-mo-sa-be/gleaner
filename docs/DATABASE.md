@@ -143,3 +143,7 @@ Field rules:
   the link's visible text compared case- and whitespace-insensitively; follow its `href`);
   `page_param` (`param`, `start`; increments a URL query parameter).
 - `pagination.max_pages` and `limits.max_records`: 0 means no limit.
+- `start_urls` (optional, v0.5): several start pages. When present, a run goes through each in order (with
+  pagination restarting per start page) and `start_url` equals the first one. Up to 500, no duplicates.
+- Each stored record's `data` also holds `_start_page`: the start page it was found from (exported as the
+  "Start Page" column).

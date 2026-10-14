@@ -188,6 +188,50 @@ class PickerTests(unittest.TestCase):
         self.assertEqual(extract_detail(self.html, recipe, self.url), expected)
         self.assertEqual(extract_detail(self.snapshot(), recipe, self.url), expected)
 
+    # -- auto-detect ---------------------------------------------------------------------------
+
+    def auto(self, kind="list"):
+        return json.loads(self.js(f"JSON.stringify(window.__gleaner.autoDetect({json.dumps(kind)}))"))
+
+    def test_auto_detect_table(self):
+        self.load(TABLE, "https://example.com/list")
+        res = self.auto()
+        self.assertEqual(res["type"], "auto")
+        self.assertEqual(res["itemSelector"], "#no-more-tables table.table tr")
+        self.assertEqual([f["name"] for f in res["fields"]], ["Name", "City"])  # constant "Connect" left out
+        self.assertEqual(res["link"]["samples"][0], "https://example.com/dr-a")
+        self.assertEqual(res["pagination"], {"type": "page_param", "param": "page", "start": 1})
+        recipe = self.list_recipe(res["itemSelector"], *[Field(f["name"], f["selector"]) for f in res["fields"]],
+                                  Field("Link", res["link"]["selector"], attr="href", type="link"))
+        rows = extract_list(self.html, recipe, self.url)
+        self.assertEqual([r["Name"] for r in rows], ["DR. A", "DR. B", "DR. C"])
+        self.assertEqual(rows[2]["Link"], "https://example.com/dr-c")
+
+    def test_auto_detect_cards_and_next_text(self):
+        self.load(CARDS, "https://example.com/cards")
+        res = self.auto()
+        self.assertEqual(res["itemSelector"], "#results div.card")
+        self.assertEqual([f["name"] for f in res["fields"]], ["Title", "Phone"])
+        self.assertEqual((res["pagination"]["type"], res["pagination"].get("text")), ("next_link", "Next"))
+
+    def test_auto_detect_prefers_listing_over_link_lists(self):
+        footer = "".join(f'<li><a href="/city/{i}">City number {i}</a></li>' for i in range(60))
+        self.load(TABLE.replace("<h1>Doctors</h1>", f"<ul class='cities'>{footer}</ul>"), "https://example.com/list")
+        self.assertEqual(self.auto()["itemSelector"], "#no-more-tables table.table tr")
+
+    def test_auto_detect_item_page(self):
+        self.load(DETAIL, "https://example.com/dr-a")
+        res = self.auto("detail")
+        self.assertEqual(res["type"], "auto-detail")
+        found = {f["label"]: (f["label_scope"], f["sample"]) for f in res["fields"]}
+        self.assertEqual(found["Phone Number"], ("#profile table tr", "98450 00000"))
+        self.assertEqual(found["Email"], ("#profile dl.extra dt", "a@b.in"))
+        self.assertIn("Address", found)
+
+    def test_auto_detect_nothing_repeating(self):
+        self.load("<html><body><h1>Hello</h1><p>Just one paragraph.</p></body></html>", "https://example.com/")
+        self.assertEqual(self.auto()["type"], "error")
+
     # -- isolation -----------------------------------------------------------------------------
 
     def test_page_scripts_cannot_see_picker(self):

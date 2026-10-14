@@ -80,13 +80,13 @@ class Store:
         if recipe_id is None:
             cur = self.db.execute(
                 "INSERT INTO recipes (name, start_url, body, created_at, updated_at) VALUES (?, ?, ?, ?, ?)",
-                (recipe.name, recipe.start_url, body, now(), now()),
+                (recipe.name, recipe.start_pages()[0], body, now(), now()),
             )
             recipe_id = cur.lastrowid
         else:
             self.db.execute(
                 "UPDATE recipes SET name = ?, start_url = ?, body = ?, updated_at = ? WHERE id = ?",
-                (recipe.name, recipe.start_url, body, now(), recipe_id),
+                (recipe.name, recipe.start_pages()[0], body, now(), recipe_id),
             )
         self.db.commit()
         return recipe_id

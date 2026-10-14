@@ -10,7 +10,7 @@ EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 NUMBER = re.compile(r"-?\d+(?:[.,]\d+)*")
 
 FIXED_BEFORE = ["Record ID"]
-FIXED_AFTER = ["Source URL", "Collected On", "Issues"]
+FIXED_AFTER = ["Source URL", "Start Page", "Collected On", "Issues"]
 
 
 def normalize_phones(raw):
@@ -96,6 +96,7 @@ def build_rows(recipe: Recipe, records: list[dict], id_prefix="R"):
                 else:
                     seen[key] = row["Record ID"]
         row["Source URL"] = source_url(rec["item_key"])
+        row["Start Page"] = data.get("_start_page")
         row["Collected On"] = (rec.get("collected_at") or "")[:10]
         row["Issues"] = "; ".join(issues) or None
         (review if blocking else ready).append(row)

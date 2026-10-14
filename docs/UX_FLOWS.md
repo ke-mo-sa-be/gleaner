@@ -114,3 +114,27 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 4. User closes Gleaner and runs the installer; it replaces the program and keeps recipes, data and Excel
    files.
 5. **Settings > Updates > Check now** does the same on demand and explains problems in plain language.
+
+## Flow 11 - Auto-detect
+
+1. On a list page in the builder, user clicks **Auto-detect**.
+2. Matching items light up; the Fields table fills with proposed columns ("auto-detected"), the item link
+   and the next page are set when found. Message: "Found 15 items with 5 fields. Each item has its own
+   page: click Open an item, then Auto-detect again there. Next page found."
+3. If list fields already existed, the user is asked before they are replaced.
+4. On an item page, Auto-detect adds every label/value pair not already picked.
+5. Fields that look like date of birth, ID or bank details are not added; the message lists them.
+6. Nothing found: "Couldn't find a repeating list on this page. Pick the fields by hand."
+
+## Flow 12 - Start pages
+
+1. Builder, list page: **+ Add this page** adds the current list to **Start pages**.
+2. User browses to another list (another city) and adds it too; or **Paste addresses...** with one address
+   per line (unusable lines are counted and skipped).
+3. Save. Runs visit every start page; the log says "Start page 2 of 12".
+
+## Flow 13 - Master list and sharing
+
+1. Library > **Master list...**: dialog lists recipes with record counts (recipes with records ticked).
+   **Create Excel** writes Master / Needs Review / Sources; banner offers Open Excel / Open folder.
+2. Library > **Share recipe...**: save dialog for `<recipe>.json`; banner explains how a colleague imports it.

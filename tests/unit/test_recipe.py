@@ -30,6 +30,30 @@ class RecipeTests(unittest.TestCase):
         again = from_dict(json.loads(recipe.to_json()))
         self.assertEqual(recipe, again)
 
+    def test_start_pages(self):
+        data = base()
+        data["start_urls"] = ["https://example.com/list?city=a", "https://example.com/list?city=b"]
+        del data["start_url"]
+        recipe = from_dict(data)
+        self.assertEqual(recipe.start_url, "https://example.com/list?city=a")
+        self.assertEqual(recipe.start_pages(), data["start_urls"])
+        validate(recipe)
+        self.assertEqual(from_dict(json.loads(recipe.to_json())), recipe)
+        self.assertEqual(from_dict(base()).start_pages(), ["https://example.com/list"])
+
+    def test_start_page_problems(self):
+        data = base()
+        data["start_urls"] = ["https://example.com/a", "https://example.com/a", "http://127.0.0.1/x"]
+        data["start_url"] = "https://example.com/other"
+        with self.assertRaises(RecipeError) as ctx:
+            validate(from_dict(data))
+        text = str(ctx.exception)
+        self.assertIn("listed twice", text)
+        self.assertIn("local network", text)
+        data["start_urls"] = "https://example.com/a"
+        with self.assertRaises(RecipeError):
+            from_dict(data)
+
     def test_unknown_key_rejected(self):
         data = base()
         data["proxy"] = "http://x"

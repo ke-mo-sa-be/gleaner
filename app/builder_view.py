@@ -7,8 +7,9 @@ from urllib.parse import urlsplit
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView, QLineEdit, QMessageBox,
-                               QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
+                               QListWidget, QMessageBox, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
+                               QWidget)
 
 from app.tasks import run_task, with_store
 from app.web import PickerPage
@@ -135,6 +136,10 @@ class BuilderView(QWidget):
         self.steps.setTextFormat(Qt.TextFormat.RichText)
         side.addWidget(self.steps)
         help_row = QHBoxLayout()
+        self.auto_btn = button("Auto-detect", "primary",
+                               tooltip="Let Gleaner find the list, its fields, the item link and the next page")
+        self.auto_btn.clicked.connect(self._auto_detect)
+        help_row.addWidget(self.auto_btn)
         help_row.addStretch(1)
         self.help_btn = button("How does this work?", tooltip="Step-by-step guide to making a recipe")
         self.help_btn.clicked.connect(lambda: self.help_requested.emit("builder"))
@@ -163,6 +168,7 @@ class BuilderView(QWidget):
 
         side.addWidget(label("Fields", "h2"))
         self.fields_table = QTableWidget(0, 5)
+        self.fields_table.setMinimumHeight(150)
         self.fields_table.setHorizontalHeaderLabels(["Page", "Column name", "Type", "Required", "Found"])
         self.fields_table.verticalHeader().hide()
         self.fields_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
@@ -185,12 +191,43 @@ class BuilderView(QWidget):
         row.addWidget(self.remove_btn)
         row.addStretch(1)
         side.addLayout(row)
+        side.addWidget(label("Start pages", "h2"))
+        side.addWidget(label("Gleaner starts at each of these list pages, for example one per city. Empty means the "
+                             "page you are on.", "hint", wrap=True))
+        self.starts_list = QListWidget()
+        self.starts_list.setMaximumHeight(78)
+        self.starts_list.setAccessibleName("Start pages")
+        side.addWidget(self.starts_list)
+        row = QHBoxLayout()
+        self.add_start_btn = button("+ Add this page")
+        self.paste_starts_btn = button("Paste addresses...")
+        self.remove_start_btn = button("Remove")
+        for b in (self.add_start_btn, self.paste_starts_btn, self.remove_start_btn):
+            row.addWidget(b)
+        row.addStretch(1)
+        side.addLayout(row)
+        self.add_start_btn.clicked.connect(self._add_start_page)
+        self.paste_starts_btn.clicked.connect(self._paste_start_pages)
+        self.remove_start_btn.clicked.connect(self._remove_start_page)
         self.save_btn = button("Save recipe", "primary")
-        side.addWidget(self.save_btn)
 
         horizontal = QSplitter(Qt.Orientation.Horizontal)
         horizontal.addWidget(self.view)
-        horizontal.addWidget(panel)
+        # The panel scrolls rather than squashing the steps and fields on small screens.
+        panel_scroll = QScrollArea()
+        panel_scroll.setWidgetResizable(True)
+        panel_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        panel_scroll.setWidget(panel)
+        panel.setObjectName("view")
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.addWidget(panel_scroll, 1)
+        save_row = QHBoxLayout()
+        save_row.setContentsMargins(12, 6, 0, 0)
+        save_row.addWidget(self.save_btn)
+        right_layout.addLayout(save_row)
+        horizontal.addWidget(right)
         horizontal.setStretchFactor(0, 65)
         horizontal.setStretchFactor(1, 35)
         horizontal.setSizes([720, 480])
@@ -239,6 +276,7 @@ class BuilderView(QWidget):
         self.item_selector = None
         self.fields: list[BuilderField] = []
         self.pagination = Pagination()
+        self.start_urls: list[str] = []
         self.list_url = None
         self.list_html = None
         self.list_snapshot_url = None
@@ -252,6 +290,7 @@ class BuilderView(QWidget):
         self.view.setUrl(QUrl("about:blank"))
         self._render_fields()
         self._render_pagination()
+        self._render_start_pages()
         self._fill_preview([], [])
         self._instruct(INSTRUCTIONS["idle"])
         self._update_buttons()
@@ -267,10 +306,12 @@ class BuilderView(QWidget):
         if recipe.detail:
             self.fields += [BuilderField("detail", f, found="saved") for f in recipe.detail.fields]
         self.pagination = recipe.pagination
+        self.start_urls = list(recipe.start_urls)
         self.name_edit.setText(recipe.name)
         self.url_edit.setText(recipe.start_url)
         self._render_fields()
         self._render_pagination()
+        self._render_start_pages()
         self.dirty = False
         self.open_url()
 
@@ -288,9 +329,11 @@ class BuilderView(QWidget):
         link = next((b.field.name for b in self.fields if b.is_link), None)
         phones = [f.name for f in list_fields + detail_fields if f.type == "phone"]
         dedup = [list_fields[0].name, phones[0]] if phones and list_fields and list_fields[0].name != phones[0] else []
+        pages = self.start_urls or [self.list_url or self.url_edit.text().strip()]
         return Recipe(
             name=self.name_edit.text().strip(),
-            start_url=self.list_url or self.url_edit.text().strip(),
+            start_url=pages[0],
+            start_urls=list(pages) if len(pages) > 1 else [],
             item_selector=self.item_selector or "",
             list_fields=list_fields,
             pagination=self.pagination,
@@ -754,9 +797,133 @@ class BuilderView(QWidget):
         lines = [f"{'&#10003;' if done else '&#9675;'}&nbsp; {i}. {text}" for i, (done, text) in enumerate(steps, 1)]
         self.steps.setText("<b>Steps</b><br>" + "<br>".join(lines))
 
+    # ---- auto-detect -------------------------------------------------------------------------
+
+    def _auto_detect(self):
+        if not self.loaded:
+            self._instruct("Open a page first, and wait for it to finish loading.", error=True)
+            return
+        self._instruct("Looking for the list and its fields...")
+        self.page.auto_detect("detail" if self.on_detail else "list", self._auto_detected)
+
+    def _auto_detected(self, res):
+        kind = res.get("type")
+        if kind == "error":
+            self._instruct(res.get("message", "Auto-detect found nothing. Pick the fields by hand."), error=True)
+            return
+        left_out = []
+        if kind == "auto":
+            if any(b.page == "list" for b in self.fields):
+                answer = QMessageBox.question(self, "Replace list fields?",
+                                              "Auto-detect replaces the list fields you picked. Item page fields "
+                                              "are kept. Continue?")
+                if answer != QMessageBox.StandardButton.Yes:
+                    self._instruct("Auto-detect cancelled.")
+                    return
+                self.fields = [b for b in self.fields if b.page == "detail"]
+            self.item_selector = res["itemSelector"]
+            for f in res["fields"]:
+                sample = (f.get("samples") or [""])[0]
+                name = self._unique_name(f.get("name") or "Field")
+                if SENSITIVE.search(name) or SENSITIVE.search(sample):
+                    left_out.append(name)
+                    continue
+                self.fields.append(BuilderField("list", Field(name, f["selector"], type=guess_type(sample)),
+                                                f["steps"], "auto-detected"))
+            added = sum(1 for b in self.fields if b.page == "list")
+            if res.get("link"):
+                link = res["link"]
+                self.fields.append(BuilderField("list", Field(self._unique_name("Item link"), link["selector"],
+                                                              attr="href", type="link"),
+                                                link["steps"], "auto-detected", is_link=True))
+            if res.get("pagination") and self.pagination.type == "none":
+                self.pagination = Pagination(**res["pagination"])
+                self._render_pagination()
+            message = f"Found {res['items']} items with {added} fields."
+            if res.get("link"):
+                message += " Each item has its own page: click Open an item, then Auto-detect again there."
+            if self.pagination.type != "none":
+                message += " Next page found."
+            self.page.show_list(self.item_selector)
+        else:
+            known = {b.field.label for b in self.fields if b.page == "detail"}
+            added = 0
+            for f in res["fields"]:
+                if f["label"] in known:
+                    continue
+                name = self._unique_name(f["label"])
+                if SENSITIVE.search(name) or SENSITIVE.search(f.get("sample") or ""):
+                    left_out.append(f["label"])
+                    continue
+                self.fields.append(BuilderField(
+                    "detail", Field(name, label=f["label"], label_scope=f["label_scope"],
+                                    type=guess_type(f.get("sample"))), found=f"next to '{f['label']}'"))
+                added += 1
+            message = f"Found {added} item fields."
+        if left_out:
+            message += f" Left out as sensitive personal data: {', '.join(left_out)}."
+        message += " Check the preview, remove what you don't need and rename columns."
+        self._instruct(message)
+        self.dirty = True
+        self._render_fields()
+        self._update_buttons()
+        self._refresh_preview()
+
+    # ---- start pages -------------------------------------------------------------------------
+
+    def _render_start_pages(self):
+        self.starts_list.clear()
+        self.starts_list.addItems(self.start_urls)
+
+    def _add_start_page(self):
+        if not (self.loaded and not self.on_detail and self.list_url):
+            self._instruct("Go to a list page first, then click + Add this page.", error=True)
+            return
+        if self.list_url in self.start_urls:
+            self._instruct("This page is already a start page.")
+            return
+        self.start_urls.append(self.list_url)
+        self.dirty = True
+        self._render_start_pages()
+        self._instruct(f"Start page added ({len(self.start_urls)} in total). Go to another list page in the "
+                       "browser and add it too, or paste a list of addresses.")
+        self._update_buttons()
+
+    def _paste_start_pages(self):
+        text, ok = QInputDialog.getMultiLineText(self, "Start pages", "Paste the addresses of list pages, one per line:")
+        if not ok:
+            return
+        added, bad = 0, 0
+        for line in (x.strip() for x in text.splitlines()):
+            if not line:
+                continue
+            if check_url(line, self.allow_local):
+                bad += 1
+            elif line not in self.start_urls:
+                self.start_urls.append(line)
+                added += 1
+        self.dirty = self.dirty or added > 0
+        self._render_start_pages()
+        message = f"Added {added} start pages."
+        if bad:
+            message += f" {bad} lines were not usable web addresses and were skipped."
+        self._instruct(message, error=bool(bad and not added))
+        self._update_buttons()
+
+    def _remove_start_page(self):
+        row = self.starts_list.currentRow()
+        if 0 <= row < len(self.start_urls):
+            del self.start_urls[row]
+            self.dirty = True
+            self._render_start_pages()
+            self._update_buttons()
+
     def _update_buttons(self):
         self._render_steps()
         on_list = self.loaded and not self.on_detail
+        self.auto_btn.setEnabled(self.loaded)
+        self.add_start_btn.setEnabled(on_list)
+        self.remove_start_btn.setEnabled(bool(self.start_urls))
         has_link = any(b.is_link for b in self.fields)
         self.add_list_btn.setEnabled(on_list)
         self.link_btn.setEnabled(on_list)

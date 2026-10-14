@@ -6,6 +6,7 @@ import os
 import tempfile
 import time
 import unittest
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -126,6 +127,48 @@ class BuilderFlowTest(unittest.TestCase):
         self.assertEqual((result.status, result.records), ("done", 6))
         first = self.store.records(saved[0])[0]["data"]
         self.assertEqual((first["Doctor"], first["Phone Number"]), ("DR. ALPHA", "98450 00001"))
+
+    def test_auto_detect_and_start_pages(self):
+        b = self.builder
+        b.url_edit.setText(self.site.base + "/list")
+        b.open_url()
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)
+
+        b._auto_detect()
+        wait_until(lambda: any(x.is_link for x in b.fields), builder=b)
+        self.assertEqual(b.item_selector, "#results li.item")
+        self.assertEqual([x.field.name for x in b.fields], ["Name", "Item link"])  # constant "View" left out
+        self.assertEqual((b.pagination.type, b.pagination.param), ("page_param", "page"))
+
+        b._open_sample_detail()
+        wait_until(lambda: b.on_detail and b.loaded, builder=b)
+        b._auto_detect()
+        wait_until(lambda: any(x.page == "detail" for x in b.fields), builder=b)
+        labels = [x.field.label for x in b.fields if x.page == "detail"]
+        self.assertEqual(labels, ["Name", "Phone Number", "Address :"])
+        phone = next(x.field for x in b.fields if x.field.label == "Phone Number")
+        self.assertEqual(phone.type, "phone")
+
+        b._back_to_list()
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)
+        b._add_start_page()
+        self.assertEqual(b.start_urls, [self.site.base + "/list"])
+        with mock.patch.object(builder_view.QInputDialog, "getMultiLineText",
+                               return_value=(f"{self.site.base}/list-b\nnot an address\n{self.site.base}/list", True)):
+            b._paste_start_pages()
+        self.assertEqual(b.start_urls, [self.site.base + "/list", self.site.base + "/list-b"])
+        self.assertIn("1 lines were not usable", b.instruction.text())
+
+        saved = []
+        b.saved.connect(saved.append)
+        b.name_edit.setText("Fixture auto")
+        b._save()
+        wait_until(lambda: saved, builder=b)
+        recipe = self.store.get_recipe(saved[0])
+        self.assertEqual(recipe.start_pages(), [self.site.base + "/list", self.site.base + "/list-b"])
+        fetcher = Fetcher(self.store, min_delay=0, max_delay=0, retry_wait=0, _min_delay_floor=0)
+        result = run_recipe(self.store, saved[0], fetcher)
+        self.assertEqual((result.status, result.records), ("done", 8))
 
     def test_local_address_rejected_without_test_flag(self):
         b = builder_view.BuilderView(self.store)

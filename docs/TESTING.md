@@ -30,6 +30,11 @@ Offscreen Qt (`QT_QPA_PLATFORM=offscreen`, no window opens):
 - `tests/ui/test_app_shell.py`: main window sections, Guide routing, settings storage, light/dark theme
   switch, per-run speed default; speed presets never below the 3 s floor.
 - `tests/unit/test_updates.py`: version comparison, shared-folder manifest, GitHub latest release (mocked).
+- `tests/unit/test_master.py`: master list columns, cross-recipe duplicates, workbook sheets.
+- Start pages: recipe format and validation (`test_recipe.py`), runs across start pages with per-start
+  pagination and limits (`test_runner.py`), builder add/paste/save/run (`test_builder.py`).
+- Auto-detect: tables, cards, item pages, link-heavy page noise (`test_picker.py`), builder flow end to end
+  (`test_builder.py`).
 UI tests are skipped when PySide6 is not installed. Look-and-feel is checked manually (section 5).
 
 Critical journeys:

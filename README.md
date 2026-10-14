@@ -16,9 +16,12 @@ products, members, professionals, ...) into clean Excel files, politely and safe
 
 ## Status
 
+- v0.5: Auto-detect (list, fields, item link, next page, item-page labels), several start pages per recipe,
+  master list across recipes, share recipes as files.
 - v0.4: engine (recipes, polite fetcher, extraction, resumable runner, cleanup, Excel export); desktop app
   (Library, point-and-click Recipe builder, Run with speed choice, Guide, Settings with light/dark theme and
-  update check); Windows installer; 73 automated tests including offscreen UI tests.
+  update check); Windows installer.
+- 86 automated tests including offscreen UI tests.
 - Next: see "Future" in [docs/PRD.md](docs/PRD.md) section 8.
 
 ## Setup
@@ -36,7 +39,7 @@ py -m app
 ```
 
 Library lists recipes; **New recipe** opens the builder: type the site address, Open, then click
-**+ Add list field** and click an example on the page. **Mark item link** and **+ Add item field** collect
+**Auto-detect** (or **+ Add list field** and click an example on the page). **Mark item link** and **+ Add item field** collect
 values from each item's own page; **Mark next page** makes Gleaner go through every page. Save, then Run.
 The **Guide** screen has a step-by-step tutorial, including sites with many layers.
 

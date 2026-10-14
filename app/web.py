@@ -75,6 +75,15 @@ class PickerPage(QWebEnginePage):
     def clear_highlights(self):
         self.call("window.__gleaner && window.__gleaner.clear()")
 
+    def auto_detect(self, kind, callback):
+        """callback(dict) with auto-detect results for a list page (kind="list") or item page ("detail")."""
+        def parse(text):
+            try:
+                callback(json.loads(text) if text else {"type": "error", "message": "The page isn't ready yet."})
+            except json.JSONDecodeError:
+                callback({"type": "error", "message": "Auto-detect failed. Pick the fields by hand."})
+        self.call(f"window.__gleaner ? JSON.stringify(window.__gleaner.autoDetect({json.dumps(kind)})) : ''", parse)
+
     def snapshot(self, callback):
         """callback(html) with the current DOM, minus the picker overlay."""
         self.call("window.__gleaner ? window.__gleaner.snapshot() : document.documentElement.outerHTML",

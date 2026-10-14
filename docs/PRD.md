@@ -171,6 +171,14 @@ Acceptance Criteria:
 - Library shows a dismissable "New to Gleaner?" tip until the user opens or hides it.
 - Builder shows a live step checklist and a "How does this work?" link to the tutorial chapter.
 
+### Feature 8 - Start pages, auto-detect, master list, sharing (v0.5)
+- Start pages: a recipe can start at up to 500 list pages (e.g. one per city); added from the browser or
+  pasted; each row records its start page.
+- Auto-detect: one click proposes the item list, fields with names, item link and next page on a list page,
+  and label/value fields on an item page. Heuristic, offline, no AI; sensitive-looking fields are left out.
+- Master list: several recipes in one workbook; duplicates across recipes by phone, else email.
+- Share recipe: save a recipe as a .json file; colleagues import it.
+
 ### Feature 7 - Updates
 Purpose: Get new versions to users without anyone sending files around.
 Acceptance Criteria:
@@ -199,6 +207,7 @@ Must Have:
 - Windows installer (no Python needed on user PCs).
 - The first directory MVP re-created as a recipe and matching the CLI's output.
 - Settings (theme, speed, folders, updates), in-app guide, update check (added in v0.4).
+- Start pages, auto-detect, master list, share recipe (added in v0.5).
 
 Nice to Have:
 - "Load more" button and infinite scroll pagination.
@@ -206,9 +215,8 @@ Nice to Have:
 - Pincode fill-in from district/area when missing.
 
 Future:
-- AI "Auto-detect fields" (proposes fields from a page; user confirms).
+- Optional AI help for column naming and irregular pages (heuristic auto-detect shipped in v0.5).
 - AI extraction fallback for pages with irregular layouts.
-- Several start pages per recipe (one recipe covering many cities/categories).
 - Multiple detail levels; region > city > category drill-down recipes.
 - Scheduled runs; silent auto-update; code-signed installer.
 

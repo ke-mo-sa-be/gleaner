@@ -15,6 +15,9 @@ DOCTORS = {
     4: ("DR. DELTA", "98450 00004"),
     5: ("DR. EPSILON", None),
     6: ("DR. ALPHA", "98450 00001"),
+    # second "city", served at /list-b (one page)
+    101: ("DR. KAPPA", "98450 00101"),
+    102: ("DR. LAMBDA", "98450 00102"),
 }
 PER_PAGE = 3
 
@@ -60,9 +63,12 @@ class Handler(BaseHTTPRequestHandler):
         q = parse_qs(parts.query)
         if path == "/robots.txt":
             return self.send(200, "User-agent: *\nDisallow: /private/\n")
+        if path == "/list-b":
+            n = int(q.get("page", ["1"])[0])
+            return self.send(200, listing([101, 102] if n == 1 else []))
         if path in ("/list", "/private/list"):
             n = int(q.get("page", ["1"])[0])
-            ids = [i for i in DOCTORS if (i - 1) // PER_PAGE == n - 1]
+            ids = [i for i in DOCTORS if i < 100 and (i - 1) // PER_PAGE == n - 1]
             return self.send(200, listing(ids, next_page=n + 1 if ids and n < 2 else None))
         if path.startswith("/doc/"):
             return self.send(200, detail(int(path.rsplit("/", 1)[1])))

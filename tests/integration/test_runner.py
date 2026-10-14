@@ -66,9 +66,10 @@ class RunnerTests(unittest.TestCase):
         self.assertEqual(wb.sheetnames, ["Records", "Needs Review", "Run Log"])
         header = [c.value for c in wb["Records"][1]]
         self.assertEqual(header, ["Record ID", "Name", "Profile", "Phone", "Pincode", "Source URL",
-                                  "Collected On", "Issues"])
+                                  "Start Page", "Collected On", "Issues"])
         first = [c.value for c in wb["Records"][2]]
         self.assertEqual(first[1], "DR. ALPHA")
+        self.assertEqual(first[6], self.site.base + "/list")
         self.assertEqual(first[3], "+919845000001")
         self.assertEqual(first[4], "560001")
         # never overwrite
@@ -118,6 +119,27 @@ class RunnerTests(unittest.TestCase):
     def test_no_items(self):
         _, result = self.run_path("/empty-list")
         self.assertEqual(result.status, "no_items")
+
+    def test_several_start_pages(self):
+        recipe = make_recipe(self.site.base)
+        recipe.start_urls = [self.site.base + "/list", self.site.base + "/list-b", self.site.base + "/empty-list"]
+        rid = self.store.save_recipe(recipe)
+        events = []
+        result = run_recipe(self.store, rid, self.fetcher(), on_progress=events.append)
+        self.assertEqual((result.status, result.records), ("done", 8))
+        starts = {r["data"]["Name"]: r["data"]["_start_page"] for r in self.store.records(rid)}
+        self.assertEqual(starts["DR. KAPPA"], self.site.base + "/list-b")
+        self.assertEqual(starts["DR. GAMMA"], self.site.base + "/list")
+        self.assertEqual(self.site.hits["/list-b"], 2)  # page 1, then page=2 (empty): numbering restarted
+        self.assertTrue(any("No items found on this start page" in e.message for e in events))
+
+    def test_max_records_spans_start_pages(self):
+        recipe = make_recipe(self.site.base)
+        recipe.start_urls = [self.site.base + "/list-b", self.site.base + "/list"]
+        rid = self.store.save_recipe(recipe)
+        result = run_recipe(self.store, rid, self.fetcher(), max_records=3)
+        self.assertEqual((result.status, result.records), ("done", 3))
+        self.assertEqual(self.site.hits["/list"], 1)
 
     def test_stop_control(self):
         control = RunControl()
