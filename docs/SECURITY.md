@@ -25,7 +25,12 @@ These are product requirements, not settings. They are enforced in `core/fetcher
   (`cf-chl-`, `error code: 1006`/`1015`), CAPTCHA/"access denied" pages, 3 blank pages in a row.
 - Never: proxies, VPN switching, IP rotation, user-agent rotation to evade detection, CAPTCHA solving,
   headless-detection evasion, or retrying after a block.
-- The User-Agent includes the token `Gleaner` so site owners can identify the tool.
+- The User-Agent includes the token `Gleaner` so site owners can identify the tool, also in the built-in
+  browser (builder and browser runs).
+- Browser runs (`render_js` recipes, v0.7) obey the same rules: one page at a time on the shared clock,
+  robots.txt checked for each page, block signals (HTTP status from the browser, challenge and CAPTCHA
+  text) stop the run. Pictures are not loaded. No stealth: the browser is not disguised and never tries to
+  hide that it is automated.
 - A recipe whose last run was blocked requires explicit confirmation to run again (UX Flow 5).
 
 ## 4. Secrets

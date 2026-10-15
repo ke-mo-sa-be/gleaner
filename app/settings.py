@@ -85,3 +85,11 @@ def guide_seen() -> bool:
 
 def set_guide_seen(value: bool = True):
     _set("guide_seen", "true" if value else "false")
+
+
+def nav_collapsed() -> bool:
+    return str(_get("nav_collapsed", "false")).lower() == "true"
+
+
+def set_nav_collapsed(value: bool):
+    _set("nav_collapsed", "true" if value else "false")

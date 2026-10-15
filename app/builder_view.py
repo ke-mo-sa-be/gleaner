@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeade
                                QListWidget, QMessageBox, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
                                QWidget)
 
+from app import render
 from app.tasks import run_task, with_store
 from app.web import PickerPage
 from app.widgets import button, label, restyle
@@ -31,6 +32,7 @@ COUNTRIES = [("India +91", "91"), ("Nigeria +234", "234"), ("Kenya +254", "254")
 SENSITIVE = re.compile(r"birth|\bdob\b|aadha?ar|\bpan\b|bank|account\s*(no|number)|ifsc|card\s*(no|number)", re.I)
 EMAIL_LIKE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 PREVIEW_ROWS = 10
+SETTLE_MS = 1500  # second preview after load, for pages built by JavaScript
 
 INSTRUCTIONS = {
     "idle": "Type the website address and click Open. Go to the page that lists the items you want "
@@ -89,7 +91,7 @@ FETCHER_OPTIONS = {}
 
 
 def _fetcher(store):
-    return Fetcher(store, **FETCHER_OPTIONS)
+    return Fetcher(store, renderer=render.renderer(), **FETCHER_OPTIONS)
 
 
 def _robots_allows(store, url):
@@ -104,7 +106,7 @@ def _raw_item_count(store, recipe):
 
 def _fetch_details(store, recipe, links):
     fetcher = _fetcher(store)
-    return [extract_detail(fetcher.get(link), recipe, link) for link in links]
+    return [extract_detail(fetcher.get(link, render=recipe.render_js), recipe, link) for link in links]
 
 
 class BuilderView(QWidget):
@@ -116,6 +118,7 @@ class BuilderView(QWidget):
         self.setObjectName("view")
         self.store = store
         self.allow_local = allow_local  # tests only (local fixture site)
+        render.renderer()  # created here, on the UI thread; background checks use it for JavaScript sites
         self._build_ui()
         self.page = PickerPage(parent=self)
         self.view.setPage(self.page)
@@ -334,6 +337,7 @@ class BuilderView(QWidget):
         self.item_selector = None
         self.item_mode = "elements"
         self.phone_country = "91"
+        self.render_js = False
         self._last_detail_url = None
         self.fields: list[BuilderField] = []
         self.pagination = Pagination()
@@ -365,6 +369,7 @@ class BuilderView(QWidget):
         self.item_selector = recipe.item_selector
         self.item_mode = recipe.item_mode
         self.phone_country = recipe.phone_country
+        self.render_js = recipe.render_js
         link = recipe.detail.link_field if recipe.detail else None
         self.fields = [BuilderField("list", f, found="saved", is_link=f.name == link) for f in recipe.list_fields]
         if recipe.detail:
@@ -402,6 +407,7 @@ class BuilderView(QWidget):
             item_selector=self.item_selector or "",
             item_mode=self.item_mode,
             phone_country=self.phone_country,
+            render_js=self.render_js,
             list_fields=list_fields,
             pagination=self.pagination,
             detail=Detail(link, detail_fields) if link and detail_fields else None,
@@ -467,6 +473,10 @@ class BuilderView(QWidget):
             self._instruct("This is one item's page. Click + Add item field, then click a value.")
         self._update_buttons()
         self._refresh_preview()
+        # Sites that build their content with JavaScript fill the page after it has loaded: look again.
+        loaded_url = url
+        QTimer.singleShot(SETTLE_MS, lambda: self.loaded and self.page.url().toString() == loaded_url
+                          and self._refresh_preview())
 
     def _on_url_changed(self, qurl):
         if not self.on_detail and qurl.toString() != "about:blank":
@@ -940,14 +950,24 @@ class BuilderView(QWidget):
 
     def _raw_checked(self, recipe, count):
         self.save_btn.setEnabled(True)
-        if count == 0:
-            self._instruct("This site builds its list inside the browser with JavaScript. Gleaner can't collect "
-                           "sites like this yet, so the recipe was not saved.", error=True)
+        # Items the builder's browser shows on this page. Far more than the plain page has means the site
+        # builds its list with JavaScript: runs then open each page in Gleaner's browser.
+        shown = len(self._safe_list(self.list_html, recipe, self.list_snapshot_url)) if self.list_html else 0
+        recipe.render_js = shown > 0 and count < shown / 2
+        if count == 0 and not recipe.render_js:
+            self._instruct("No items found on the start page. Open the list page and check the preview.",
+                           error=True)
             return
+        self.render_js = recipe.render_js
         self.recipe_id = self.store.save_recipe(recipe, self.recipe_id)
         self.dirty = False
         self._update_buttons()
-        self._instruct(f"Saved. {count} items found on the first page. Run it from the Library.")
+        if recipe.render_js:
+            self._instruct(f"Saved. This site builds its list with JavaScript, so runs open each page in Gleaner's "
+                           f"browser: {shown} items on this page, a little slower than usual. Run it from the "
+                           "Library.")
+        else:
+            self._instruct(f"Saved. {count} items found on the first page. Run it from the Library.")
         self.saved.emit(self.recipe_id)
 
     def _save_failed(self, message):

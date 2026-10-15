@@ -57,6 +57,16 @@ def sections_page():
                 f"<p>Other lists</p></div></article>")
 
 
+def js_list_page():
+    """The list is not in the HTML: a script builds it a moment after the page loads."""
+    data = [[i, DOCTORS[i][0]] for i in (1, 2, 3)]
+    script = ("<script>setTimeout(() => { const ul = document.getElementById('results');"
+              f" for (const [id, name] of {data!r}) {{ const li = document.createElement('li'); li.className = 'item';"
+              " li.innerHTML = '<b class=\"name\">' + name + '</b><a class=\"more\" href=\"/doc/' + id + '\">View</a>';"
+              " ul.appendChild(li); } }, 300);</script>")
+    return page(f'<p>Loading doctors...</p><ul id="results"></ul>{script}')
+
+
 class Handler(BaseHTTPRequestHandler):
     hits: Counter = Counter()
 
@@ -95,6 +105,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, listing([1, 2, 3, 4], detail_prefix="/blank/"))
         if path.startswith("/blank/"):
             return self.send(200, "")
+        if path == "/js-list":
+            return self.send(200, js_list_page())
         if path == "/sections":
             return self.send(200, sections_page())
         if path == "/empty-list":

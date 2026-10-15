@@ -79,7 +79,10 @@ title in Body Semibold, details collapsible.
 ## 11. Navigation
 
 Header: none (native title bar).
-Sidebar: left vertical list: Library, Builder, Run. Selected item uses Primary text + light fill.
+Sidebar: left column, Surface background, 1px Border on the right. Top: menu button (collapse to 52 px,
+icons only, names as tooltips; Ctrl+B). Middle: Library, Recipe builder, Run, Guide, Settings with icons;
+selected item uses Primary text and icon + Selected fill. Bottom: theme button (icon + "Theme: <name>",
+cycles Match Windows / Light / Dark; Ctrl+Shift+T).
 Mobile Navigation: not applicable.
 
 ## 12. States
@@ -92,9 +95,10 @@ Disabled: as Buttons/Inputs.
 
 ## 13. Icons
 
-Icon Library: Qt standard icons (QStyle.StandardPixmap) in MVP
-Default Size: 16px
-Icon Style: system default
+Icon Library: Windows icon font (Segoe Fluent Icons, falling back to Segoe MDL2 Assets), drawn in theme
+colours by `app/widgets.py glyph_icon()`; redrawn when the theme changes.
+Default Size: 20px in the sidebar
+Icon Style: outline, Muted colour; Primary when selected
 
 ## 14. Responsive Design
 

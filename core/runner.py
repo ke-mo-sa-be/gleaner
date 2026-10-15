@@ -84,11 +84,14 @@ class _Crawl:
     def emit(self, event, message, url=None):
         self.on_progress(Progress(event, self.pages, self.records, message, url))
 
-    def fetch(self, url):
+    def fetch(self, url, wait_for=None):
         """Page HTML, or None for a blank page we skip. Several blanks in a row look like a soft block."""
         self.control.checkpoint()
         try:
-            html = self.fetcher.get(url)
+            if self.recipe.render_js:  # the site builds its pages with JavaScript: open them in the browser
+                html = self.fetcher.get(url, render=True, wait_for=wait_for)
+            else:
+                html = self.fetcher.get(url)
         except EmptyPageError:
             self.consecutive_empty += 1
             if self.consecutive_empty >= MAX_CONSECUTIVE_EMPTY:
@@ -124,7 +127,7 @@ class _Crawl:
             if self.max_pages and self.pages >= self.max_pages:
                 return items_found, True
             seen.add(url)
-            html = self.fetch(url)
+            html = self.fetch(url, wait_for=self.recipe.item_selector)
             if html is None:
                 self.emit("info", "Stopped going through pages because a list page came back empty.", url)
                 break

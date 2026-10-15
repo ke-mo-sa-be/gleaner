@@ -54,6 +54,7 @@ class SettingsView(QWidget):
         self.theme.setCurrentIndex(self.theme.findData(settings.theme()))
         self.theme.setAccessibleName("Theme")
         self.theme.currentIndexChanged.connect(self._theme_changed)
+        style.theme_changed.changed.connect(self._sync_theme)  # the sidebar's theme button changes it too
         row.addWidget(self.theme)
         row.addStretch(1)
         layout.addLayout(row)
@@ -131,6 +132,13 @@ class SettingsView(QWidget):
         layout.addWidget(label(f"Gleaner {__version__}. Collects public directory listings politely: one page at "
                                "a time, robots rules respected, stops the moment a site objects.", "hint", wrap=True))
         layout.addStretch(1)
+
+    def _sync_theme(self):
+        index = self.theme.findData(style.theme())
+        if index >= 0 and index != self.theme.currentIndex():
+            self.theme.blockSignals(True)
+            self.theme.setCurrentIndex(index)
+            self.theme.blockSignals(False)
 
     def _theme_changed(self, _index):
         key = self.theme.currentData()

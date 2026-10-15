@@ -9,6 +9,7 @@ from PySide6.QtCore import Signal
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineScript
 
 from core import paths
+from core.fetcher import UA_TOKEN
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +27,15 @@ def browser_profile():
         _profile = QWebEngineProfile("gleaner")
         _profile.setPersistentStoragePath(str(root / "storage"))
         _profile.setCachePath(str(root / "cache"))
+        identify(_profile)
     return _profile
+
+
+def identify(profile):
+    """Add Gleaner's token to the browser's User-Agent (docs/SECURITY.md 3), keeping the rest unchanged."""
+    agent = profile.httpUserAgent()
+    if UA_TOKEN not in agent:
+        profile.setHttpUserAgent(f"{agent} {UA_TOKEN}")
 
 
 class PickerPage(QWebEnginePage):

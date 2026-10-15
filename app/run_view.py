@@ -8,7 +8,7 @@ from PySide6.QtCore import QObject, QTimer, Signal
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QMessageBox, QPlainTextEdit, QProgressBar, QSpinBox, QVBoxLayout,
                                QWidget)
 
-from app import settings
+from app import render, settings
 from app.widgets import Banner, button, label, open_path
 from core import paths
 from core.export import export_workbook
@@ -34,8 +34,10 @@ class RunWorker(QObject):
     progress = Signal(object)
     finished = Signal(dict)
 
-    def __init__(self, recipe_id, control, max_pages, max_records, speed="normal", exports_dir=None):
+    def __init__(self, recipe_id, control, max_pages, max_records, speed="normal", exports_dir=None,
+                 renderer=None):
         super().__init__()
+        self.renderer = renderer
         self.recipe_id = recipe_id
         self.control = control
         self.max_pages = max_pages
@@ -48,7 +50,7 @@ class RunWorker(QObject):
         outcome = {"status": "error", "note": "", "records": 0}
         try:
             min_delay, max_delay = speed_delays(self.speed)
-            fetcher = Fetcher(store, min_delay=min_delay, max_delay=max_delay)
+            fetcher = Fetcher(store, min_delay=min_delay, max_delay=max_delay, renderer=self.renderer)
             result = run_recipe(store, self.recipe_id, fetcher, self.control, self.progress.emit,
                                 self.max_pages, self.max_records)
             outcome = {"status": result.status, "note": result.note, "records": result.records}
@@ -187,7 +189,7 @@ class RunView(QWidget):
         self.pages = self.records = 0
         self.control = RunControl()
         self.worker = RunWorker(self.recipe_id, self.control, self.max_pages.value(), self.max_records.value(),
-                                self.speed.currentData(), settings.exports_dir())
+                                self.speed.currentData(), settings.exports_dir(), render.renderer())
         self.worker.progress.connect(self._on_progress)
         self.worker.finished.connect(self._on_finished)
         self.started_at = time.monotonic()

@@ -1,20 +1,26 @@
 """Main window: sidebar navigation between Library, Recipe builder, Run, Guide and Settings."""
 
 from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtWidgets import (QHBoxLayout, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
-                               QStackedWidget, QWidget)
+from PySide6.QtGui import QKeySequence, QShortcut
+from PySide6.QtWidgets import (QApplication, QHBoxLayout, QListWidget, QListWidgetItem, QMainWindow, QMessageBox,
+                               QStackedWidget, QToolButton, QVBoxLayout, QWidget)
 
-from app import __version__, settings
+from app import __version__, settings, style
 from app.builder_view import BuilderView
 from app.help_view import HelpView
 from app.library_view import LibraryView
 from app.run_view import RunView
 from app.settings_view import SettingsView, open_update
 from app.tasks import run_task
+from app.widgets import glyph_icon
 from core import updates
 
 LIBRARY, BUILDER, RUN, GUIDE, SETTINGS = range(5)
 SECTIONS = ("Library", "Recipe builder", "Run", "Guide", "Settings")
+SECTION_ICONS = ("library", "builder", "run", "guide", "settings")
+NAV_WIDE, NAV_NARROW = 190, 52
+THEME_ORDER = ("auto", "light", "dark")
+THEME_NAMES = {"auto": "Match Windows", "light": "Light", "dark": "Dark"}
 
 
 class MainWindow(QMainWindow):
@@ -30,16 +36,41 @@ class MainWindow(QMainWindow):
         self.help_view = HelpView()
         self.settings_view = SettingsView()
 
+        self.nav_collapsed = settings.nav_collapsed()
         self.nav = QListWidget()
         self.nav.setObjectName("nav")
         for text in SECTIONS:
             item = QListWidgetItem(text)
-            item.setSizeHint(QSize(190, 40))
+            item.setSizeHint(QSize(NAV_WIDE, 40))
+            item.setData(Qt.ItemDataRole.AccessibleTextRole, text)
             self.nav.addItem(item)
-        self.nav.setFixedWidth(190)
+        self.nav.setIconSize(QSize(20, 20))
         self.nav.setWordWrap(False)
         self.nav.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.nav.setAccessibleName("Sections")
+
+        # Sidebar: collapse button, sections, and the theme button at the bottom (visible on every screen).
+        self.sidebar = QWidget()
+        self.sidebar.setObjectName("sidebar")
+        self.sidebar.setAttribute(Qt.WidgetAttribute.WA_StyledBackground)  # paint the stylesheet border
+        side = QVBoxLayout(self.sidebar)
+        side.setContentsMargins(0, 0, 1, 0)  # keep the right border visible beside the buttons
+        side.setSpacing(0)
+        self.collapse_btn = QToolButton()
+        self.collapse_btn.setObjectName("navButton")
+        self.collapse_btn.setIconSize(QSize(20, 20))
+        self.collapse_btn.clicked.connect(self.toggle_nav)
+        side.addWidget(self.collapse_btn)
+        side.addWidget(self.nav, 1)
+        self.theme_btn = QToolButton()
+        self.theme_btn.setObjectName("navButton")
+        self.theme_btn.setIconSize(QSize(20, 20))
+        self.theme_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.theme_btn.clicked.connect(self.cycle_theme)
+        side.addWidget(self.theme_btn)
+        QShortcut(QKeySequence("Ctrl+Shift+T"), self, activated=self.cycle_theme)
+        QShortcut(QKeySequence("Ctrl+B"), self, activated=self.toggle_nav)
+        style.theme_changed.changed.connect(self._render_sidebar)
         self.stack = QStackedWidget()
         for view in (self.library, self.builder, self.run_view, self.help_view, self.settings_view):
             self.stack.addWidget(view)
@@ -48,11 +79,12 @@ class MainWindow(QMainWindow):
         layout = QHBoxLayout(central)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        layout.addWidget(self.nav)
+        layout.addWidget(self.sidebar)
         layout.addWidget(self.stack, 1)
         self.setCentralWidget(central)
 
         self.nav.currentRowChanged.connect(self.stack.setCurrentIndex)
+        self.nav.currentRowChanged.connect(lambda _row: self._render_sidebar())
         self.library.edit_requested.connect(self.edit_recipe)
         self.library.run_requested.connect(self.run_recipe)
         self.builder.saved.connect(self._recipe_saved)
@@ -60,9 +92,46 @@ class MainWindow(QMainWindow):
         for view in (self.library, self.builder, self.settings_view):
             view.help_requested.connect(self.show_help)
         self.nav.setCurrentRow(LIBRARY)
+        self._render_sidebar()
 
         if check_updates and settings.auto_update_check():
             QTimer.singleShot(3000, self._check_updates)
+
+    # ---- sidebar -----------------------------------------------------------------------------
+
+    def toggle_nav(self):
+        self.nav_collapsed = not self.nav_collapsed
+        settings.set_nav_collapsed(self.nav_collapsed)
+        self._render_sidebar()
+
+    def cycle_theme(self):
+        current = style.theme() if style.theme() in THEME_ORDER else "auto"
+        key = THEME_ORDER[(THEME_ORDER.index(current) + 1) % len(THEME_ORDER)]
+        settings.set_theme(key)
+        style.apply(QApplication.instance(), key)  # theme_changed redraws the sidebar and Settings
+        self.statusBar().showMessage(f"Theme: {THEME_NAMES[key]}", 3000)
+
+    def _render_sidebar(self):
+        narrow = self.nav_collapsed
+        width = NAV_NARROW if narrow else NAV_WIDE
+        self.sidebar.setFixedWidth(width)
+        for row, (text, icon) in enumerate(zip(SECTIONS, SECTION_ICONS)):
+            item = self.nav.item(row)
+            item.setText("" if narrow else text)
+            item.setToolTip(text if narrow else "")
+            item.setIcon(glyph_icon(icon, "PRIMARY" if row == self.nav.currentRow() else "MUTED"))
+            item.setSizeHint(QSize(width, 40))
+        self.collapse_btn.setIcon(glyph_icon("menu", "MUTED"))
+        tip = "Show menu names (Ctrl+B)" if narrow else "Hide menu names (Ctrl+B)"
+        self.collapse_btn.setToolTip(tip)
+        self.collapse_btn.setAccessibleName(tip)
+        key = style.theme() if style.theme() in THEME_ORDER else "auto"
+        nxt = THEME_ORDER[(THEME_ORDER.index(key) + 1) % len(THEME_ORDER)]
+        self.theme_btn.setIcon(glyph_icon(key, "MUTED"))
+        self.theme_btn.setText("" if narrow else f"Theme: {THEME_NAMES[key]}")
+        tip = f"Theme: {THEME_NAMES[key]}. Click for {THEME_NAMES[nxt]} (Ctrl+Shift+T)"
+        self.theme_btn.setToolTip(tip)
+        self.theme_btn.setAccessibleName(tip)
 
     def show_help(self, key):
         self.help_view.show_section(key)

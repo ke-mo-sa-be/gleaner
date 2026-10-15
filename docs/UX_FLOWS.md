@@ -49,9 +49,11 @@ again." Pagination not saved.
    "next to 'Phone Number'"), so it still works when rows shift between profiles.
 5. User clicks **Back to list**. **Preview item pages** fills item columns for the first 3 rows
    (fetched politely).
-6. User saves. Gleaner fetches the start page once without the browser; if no items are found that way
-   (the site builds its list with JavaScript), it explains that the site isn't supported yet and does not
-   save.
+6. User saves. Gleaner fetches the start page once without the browser. If far fewer items are found that
+   way than the builder's browser shows (the site builds its list with JavaScript), the recipe is saved for
+   browser runs: "Saved. This site builds its list with JavaScript, so runs open each page in Gleaner's
+   browser: 15 items on this page, a little slower than usual." If neither way finds items: "No items found
+   on the start page. Open the list page and check the preview." (not saved).
 
 ## Flow 4 - Run a recipe
 
@@ -92,6 +94,8 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 
 1. User opens **Settings**.
 2. **Theme**: Match Windows / Light / Dark. Applies at once; Match Windows follows Windows when it switches.
+   The theme button at the bottom of the sidebar (any screen, Ctrl+Shift+T) cycles the same three; Settings
+   follows it.
 3. **Collection speed**: Gentle / Normal / Faster, each with its trade-off in one sentence. This is the
    default for new runs; the Run screen has a Speed box to change it for one run.
 4. **Where your files are**: Excel folder (Change..., Open) and data folder (Open).
@@ -166,3 +170,18 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 4. Library banner: "Deleted N records. They are on the do-not-collect list now." with the reminder that
    earlier Excel files must be cleaned by hand.
 5. Later runs: log line "Skipped a record on the do-not-collect list." (no personal data).
+
+## Flow 17 - Sidebar and theme button
+
+1. Sidebar top: menu button (Ctrl+B) collapses the sidebar to icons (52 px); each icon shows its section name
+   as a tooltip; the choice is remembered.
+2. Sidebar bottom: "Theme: Light" button with sun / moon / monitor icon; click (or Ctrl+Shift+T) cycles
+   Match Windows > Light > Dark; status bar shows "Theme: Dark" for 3 s.
+
+## Flow 18 - Run a JavaScript site
+
+1. Recipe saved for browser runs (Flow 3 step 6).
+2. Run looks the same; each page opens in a hidden browser tab (pictures off), waits until the list shows
+   (or the page stops changing, at most 20 s), then is read like any other page.
+3. A browser that can't open the page within about a minute counts as a network problem (retried, then
+   "Network problem. Run again to continue.").

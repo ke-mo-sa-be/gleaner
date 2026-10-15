@@ -190,6 +190,12 @@ Acceptance Criteria:
 - Find & delete person with a hashed do-not-collect list (SECURITY.md 7).
 - Optional code signing in the build (Smart App Control).
 
+### Feature 10 - Sites built with JavaScript, sidebar, theme button (v0.7)
+- On Save, a list the plain page doesn't contain (but the builder's browser shows) marks the recipe
+  `render_js`; runs open each page in Gleaner's own browser with images off, under the same Site Safety Rules.
+- Collapsible sidebar (icons only, remembered) and a theme button on every screen.
+Not covered: document viewers (Scribd, PDF viewers), infinite scroll / "Load more", sign-in walls.
+
 ### Feature 7 - Updates
 Purpose: Get new versions to users without anyone sending files around.
 Acceptance Criteria:
@@ -220,6 +226,7 @@ Must Have:
 - Settings (theme, speed, folders, updates), in-app guide, update check (added in v0.4).
 - Start pages, auto-detect, master list, share recipe (added in v0.5).
 - Heading lists, image columns, phone country, builder back/forward, find & delete person (added in v0.6).
+- Sites that build their list with JavaScript, collapsible sidebar, theme button (added in v0.7).
 
 Nice to Have:
 - "Load more" button and infinite scroll pagination.

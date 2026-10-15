@@ -4,6 +4,9 @@ One request at a time, a random pause between requests, robots.txt checked
 before every new site, every page cached so it is never fetched twice, and a
 hard stop the moment a site signals a block. There is deliberately no proxy,
 IP rotation or CAPTCHA handling: a block ends the run for that source.
+Pages of sites that build their content with JavaScript can be opened through a
+renderer (Gleaner's own browser, supplied by the app); they go through exactly
+the same pacing, robots, block and blank-page rules.
 These rules are product requirements (docs/SECURITY.md section 3); this module
 is the only place they are defined.
 """
@@ -20,7 +23,8 @@ import requests
 log = logging.getLogger(__name__)
 
 MIN_DELAY_FLOOR = 3.0  # seconds; user settings cannot go below this
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gleaner/0.6"
+UA_TOKEN = "Gleaner/0.7"  # in every request, also the built-in browser's, so site owners can identify the tool
+USER_AGENT = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) {UA_TOKEN}"
 
 # Pause between requests (min, max seconds) for the speed users can pick. "faster" sits on the floor;
 # there is deliberately no preset below it (docs/SECURITY.md 3).
@@ -42,6 +46,18 @@ BLOCK_STATUS = {401, 403, 407, 429, 503}
 SHORT_PAGE_BLOCK_MARKERS = ("captcha", "access denied", "too many requests", "unusual traffic")
 ANY_PAGE_BLOCK_MARKERS = ("cf-chl-", "error code: 1006", "error code: 1015", "attention required! | cloudflare")
 MIN_PAGE_CHARS = 500
+
+
+class RenderError(requests.RequestException):
+    """The browser couldn't open the page (network problem or timeout); retried like a network error."""
+
+
+RENDERED = "#gleaner-rendered"  # cache key suffix: a browser-built page is cached apart from the raw HTML
+
+
+def cache_keys(url) -> tuple[str, str]:
+    """Both page-cache keys a URL can be stored under (raw and browser-built)."""
+    return url, url + RENDERED
 
 
 class BlockedError(RuntimeError):
@@ -89,9 +105,12 @@ class Fetcher:
         max_retries=2,
         retry_wait=30.0,
         log=None,
+        renderer=None,
         _min_delay_floor=MIN_DELAY_FLOOR,  # tests only; never exposed to users
     ):
+        """renderer(url, wait_for) -> (status, html): opens a page in a browser (app/render.py)."""
         self.store = store
+        self.renderer = renderer
         self.user_agent = user_agent
         self.min_delay = max(min_delay, _min_delay_floor)
         self.max_delay = max(max_delay, self.min_delay)
@@ -134,13 +153,24 @@ class Fetcher:
         """robots.txt check without fetching the page itself."""
         return self._robots_for(url).can_fetch(self.user_agent, url)
 
-    def get(self, url, refresh=False):
+    def _download(self, url, render, wait_for) -> tuple[int, str]:
+        if not render:
+            resp = self.session.get(url, timeout=self.timeout)
+            return resp.status_code, resp.text
+        if self.renderer is None:
+            raise RuntimeError("this recipe opens pages in Gleaner's browser; run it from the app")
+        return self.renderer(url, wait_for)
+
+    def get(self, url, refresh=False, render=False, wait_for=None):
         """Return page HTML, from cache when possible.
 
+        render: open the page in the browser (sites that build pages with JavaScript); wait_for is a CSS
+        selector the page should show before it counts as loaded.
         Raises BlockedError, DisallowedError, EmptyPageError or requests.RequestException.
         """
+        key = url + RENDERED if render else url
         if not refresh:
-            cached = self.store.get_page(url)
+            cached = self.store.get_page(key)
             if cached is not None:
                 return cached
 
@@ -151,7 +181,7 @@ class Fetcher:
             wait = self.retry_wait * (attempt + 1)
             self._wait()
             try:
-                resp = self.session.get(url, timeout=self.timeout)
+                status, text = self._download(url, render, wait_for)
             except requests.RequestException as exc:
                 if attempt == self.max_retries:
                     raise
@@ -160,19 +190,20 @@ class Fetcher:
                 continue
 
             self.requests_made += 1
-            if looks_blocked(resp.status_code, resp.text):
-                raise BlockedError(f"HTTP {resp.status_code} block signal at {url}")
-            if resp.status_code >= 500 and attempt < self.max_retries:
-                self.log(f"server error {resp.status_code}, retrying in {wait:.0f}s")
+            if looks_blocked(status, text):
+                raise BlockedError(f"HTTP {status} block signal at {url}")
+            if status >= 500 and attempt < self.max_retries:
+                self.log(f"server error {status}, retrying in {wait:.0f}s")
                 time.sleep(wait)
                 continue
-            resp.raise_for_status()
-            if len(resp.text.strip()) < MIN_PAGE_CHARS:
+            if status >= 400:
+                raise requests.HTTPError(f"HTTP {status} for {url}")
+            if len(text.strip()) < MIN_PAGE_CHARS:
                 if attempt == self.max_retries:
                     raise EmptyPageError(url)
                 self.log(f"blank page, retrying in {wait:.0f}s")
                 time.sleep(wait)
                 continue
 
-            self.store.save_page(url, resp.status_code, resp.text)
-            return resp.text
+            self.store.save_page(key, status, text)
+            return text

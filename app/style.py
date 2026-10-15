@@ -38,8 +38,11 @@ QPushButton[kind="primary"]:disabled, QPushButton[kind="danger"]:disabled {{ bac
 QRadioButton {{ spacing: 8px; }}
 QTableWidget {{ background: {SURFACE}; border: 1px solid {BORDER}; gridline-color: {BORDER}; }}
 QHeaderView::section {{ background: {BACKGROUND}; color: {TEXT}; border: none; border-bottom: 1px solid {BORDER}; padding: 4px; font-weight: 600; }}
-QListWidget#nav {{ background: {SURFACE}; border: none; border-right: 1px solid {BORDER}; padding-top: 8px; }}
-QListWidget#nav::item {{ padding-left: 16px; }}
+QListWidget#nav {{ background: {SURFACE}; border: none; padding-top: 4px; }}
+QListWidget#nav::item {{ padding-left: 14px; }}
+QWidget#sidebar {{ background: {SURFACE}; border-right: 1px solid {BORDER}; }}
+QToolButton#navButton {{ background: transparent; border: none; color: {MUTED}; padding: 10px 14px; text-align: left; }}
+QToolButton#navButton:hover {{ background: {SELECTED}; color: {TEXT}; }}
 QListWidget#nav::item:selected {{ background: {SELECTED}; color: {PRIMARY}; font-weight: 600; }}
 QListWidget#sections {{ background: {SURFACE}; border: 1px solid {BORDER}; }}
 QListWidget#sections::item {{ padding-left: 8px; }}
@@ -69,6 +72,11 @@ def color(key: str) -> str:
 
 def is_dark() -> bool:
     return _current is DARK
+
+
+def theme() -> str:
+    """The chosen theme: "auto", "light" or "dark"."""
+    return _theme
 
 
 def _palette(p) -> QPalette:

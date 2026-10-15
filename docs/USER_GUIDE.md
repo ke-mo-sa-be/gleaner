@@ -2,6 +2,10 @@
 
 ## Getting started
 
+**Finding your way around.** The menu on the left switches between Library, Recipe builder, Run, Guide and
+Settings. The three-line button at its top hides the names to give the screen more room (Ctrl+B); point at an
+icon to see its name. The button at the bottom switches the theme: Match Windows, Light, Dark (Ctrl+Shift+T).
+
 Gleaner collects lists from websites into a clean Excel file: businesses in a directory, shops in a
 city, products in a catalogue, members of an association, doctors or hospitals in a medical directory,
 anything that a website shows as a repeating list.
@@ -225,8 +229,16 @@ Gleaner stops by itself when:
 It never tries to get around this. If a run says the site **blocked** this PC, don't run that recipe again
 the same day and tell your manager. Running again can turn a short block into a long ban.
 
-Some sites build their list with JavaScript inside the browser. Gleaner cannot collect those yet and says so
-when you save the recipe.
+Some sites build their list with JavaScript inside the browser: the page arrives empty and fills in a moment
+later. Gleaner notices this when you save the recipe and says so. Runs then open each page in Gleaner's own
+browser (without pictures) and wait for the list to appear. That is a little slower, and the same speed,
+robots and block rules apply.
+
+Gleaner still can't collect:
+
+- documents shown in a viewer (Scribd, PDF or slide viewers): the text is a picture of a page, not a list,
+- lists that only grow when you scroll down or press **Load more**,
+- sites that need you to sign in each time, or show an "are you human?" check.
 
 ## Removing a person (do-not-collect list)
 

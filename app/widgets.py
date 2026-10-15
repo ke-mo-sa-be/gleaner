@@ -4,6 +4,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
 
 from app import style
@@ -25,6 +27,28 @@ def label(text="", role=None, wrap=False):
         lab.setProperty("role", role)
     lab.setWordWrap(wrap)
     return lab
+
+
+# Windows' own icon fonts (Windows 11 / Windows 10). Code points from Segoe MDL2 Assets, also in Fluent Icons.
+ICON_FONTS = ["Segoe Fluent Icons", "Segoe MDL2 Assets"]
+GLYPHS = {"menu": "", "library": "", "builder": "", "run": "", "guide": "",
+          "settings": "", "auto": "", "light": "", "dark": ""}
+
+
+def glyph_icon(name, color_key="TEXT", size=20) -> QIcon:
+    """An icon drawn from the Windows icon font in the current theme's colour."""
+    pixmap = QPixmap(size * 2, size * 2)  # drawn at 2x so it stays sharp on high-DPI screens
+    pixmap.fill(Qt.GlobalColor.transparent)
+    pixmap.setDevicePixelRatio(2)
+    painter = QPainter(pixmap)
+    font = QFont()
+    font.setFamilies(ICON_FONTS)
+    font.setPixelSize(int(size * 0.8))
+    painter.setFont(font)
+    painter.setPen(QColor(style.color(color_key)))
+    painter.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, GLYPHS[name])
+    painter.end()
+    return QIcon(pixmap)
 
 
 def restyle(widget):

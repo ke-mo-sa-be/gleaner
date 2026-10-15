@@ -4,6 +4,7 @@ Offscreen Qt; synthetic site on 127.0.0.1 only."""
 import json
 import os
 import tempfile
+import threading
 import time
 import unittest
 from unittest import mock
@@ -16,13 +17,13 @@ try:
 
     from PySide6.QtWebEngineCore import QWebEngineProfile
 
-    from app import builder_view, web
+    from app import builder_view, render, web
     from app.web import WORLD
 except ImportError:
     QApplication = None
 
 from core import paths
-from core.fetcher import Fetcher
+from core.fetcher import BlockedError, Fetcher
 from core.runner import run_recipe
 from core.store import Store
 from tests.integration.fixture_site import FixtureSite
@@ -234,6 +235,68 @@ class BuilderFlowTest(unittest.TestCase):
         b._reload()
         wait_until(lambda: b.loaded, builder=b)
         self.assertTrue(b.on_detail)
+
+    def test_javascript_list_is_saved_and_run_in_the_browser(self):
+        b = self.builder
+        b.url_edit.setText(self.site.base + "/js-list")
+        b.open_url()
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)
+        built = []  # the page's script adds the list after 300 ms
+        poll = lambda: b.page.runJavaScript("document.querySelectorAll('li.item').length", 0, built.append)
+        wait_until(lambda: (poll(), built and built[-1] == 3)[1], builder=b)
+        b._add_list_field()
+        self.click("li.item b.name")
+        wait_until(lambda: len(b.fields) == 1, builder=b)
+        b._mark_link()
+        self.click("li.item a.more")
+        wait_until(lambda: b.on_detail and b.loaded, builder=b)
+        b._add_detail_field()
+        self.click("table.info tr:nth-of-type(2) td:nth-of-type(2)")
+        wait_until(lambda: len(b.fields) == 3, builder=b)
+        b._back_to_list()
+        wait_until(lambda: b.loaded and not b.on_detail and b.preview_table.rowCount() == 3, builder=b)
+
+        saved = []
+        b.saved.connect(saved.append)
+        b.name_edit.setText("Fixture JavaScript list")
+        b._save()
+        wait_until(lambda: saved, builder=b)
+        self.assertIn("builds its list with JavaScript", b.instruction.text())
+        recipe = self.store.get_recipe(saved[0])
+        self.assertTrue(recipe.render_js)
+
+        # A run opens each page in the browser (from the run thread) and finds the list the script built.
+        results = []
+
+        def run():  # like the Run screen: the run thread has its own Store
+            store = Store(paths.db_path(), allow_local_urls=True)
+            try:
+                fetcher = Fetcher(store, min_delay=0, max_delay=0, retry_wait=0, _min_delay_floor=0,
+                                  renderer=render.renderer())
+                results.append(run_recipe(store, saved[0], fetcher))
+            finally:
+                store.close()
+
+        thread = threading.Thread(target=run)
+        thread.start()
+        wait_until(lambda: not thread.is_alive(), timeout=60, builder=b)
+        self.assertEqual((results[0].status, results[0].records), ("done", 3))
+        rows = [r["data"] for r in self.store.records(saved[0])]
+        name = recipe.list_fields[0].name
+        self.assertEqual([r[name] for r in rows], ["DR. ALPHA", "DR. BETA", "DR. GAMMA"])
+        self.assertEqual(rows[1]["Phone Number"], "98450 00002")
+
+    def test_renderer_reports_http_status(self):
+        out = []
+        thread = threading.Thread(target=lambda: out.append(render.renderer()(self.site.base + "/limited/1")))
+        thread.start()
+        wait_until(lambda: not thread.is_alive(), timeout=60)
+        status, html = out[0]
+        self.assertEqual(status, 429)
+        fetcher = Fetcher(self.store, min_delay=0, max_delay=0, retry_wait=0, _min_delay_floor=0,
+                          renderer=lambda url, wait_for: (status, html))
+        with self.assertRaises(BlockedError):
+            fetcher.get(self.site.base + "/limited/1", render=True)
 
     def test_local_address_rejected_without_test_flag(self):
         b = builder_view.BuilderView(self.store)

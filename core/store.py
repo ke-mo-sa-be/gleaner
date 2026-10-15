@@ -6,6 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from core import privacy
+from core.fetcher import cache_keys
 from core.recipe import Recipe, from_dict, validate
 
 SCHEMA_VERSION = 2
@@ -199,7 +200,8 @@ class Store:
                                 (kind, value_hash, now()))
             # Cached copies of pages showing this person: the item page (or the list page for items without
             # one), and list pages containing their name or email. A later run fetches those again and skips them.
-            self.db.execute("DELETE FROM pages WHERE url = ?", (item_key.split("#item", 1)[0],))
+            for key in cache_keys(item_key.split("#item", 1)[0]):
+                self.db.execute("DELETE FROM pages WHERE url = ?", (key,))
             for text in privacy.emails_in(" ".join(map(str, data.values()))) | self._names(recipes[recipe_id], data):
                 self.db.execute("DELETE FROM pages WHERE instr(lower(html), ?) > 0", (text.lower(),))
             self.db.execute("DELETE FROM records WHERE id = ?", (record_id,))

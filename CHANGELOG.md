@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Sites that build their list with JavaScript: instead of refusing to save, Gleaner saves the recipe for
+  browser runs. Runs open each page in Gleaner's own browser (pictures off), wait for the list, and keep
+  the same speed, robots and block rules.
+- Collapsible sidebar: the menu button (Ctrl+B) shrinks it to icons; remembered between starts.
+- Theme button at the bottom of the sidebar on every screen: Match Windows, Light, Dark (Ctrl+Shift+T).
+- Sidebar icons.
+
+### Changed
+
+- The built-in browser's User-Agent now includes `Gleaner/0.7`, like Gleaner's other requests.
+- The builder takes a second preview 1.5 seconds after a page loads, for pages that fill in late.
+
+### Fixed
+
+- The "Find & delete person..." button showed "Find _delete person..." (the "&" was read as a keyboard
+  shortcut).
+
 ## [0.6.0] - 2026-10-15
 
 ### Added

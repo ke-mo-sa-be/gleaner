@@ -9,7 +9,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtCore import QCoreApplication, Qt
     from PySide6.QtWebEngineCore import QWebEngineProfile
     from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -159,6 +159,35 @@ class ShellTests(unittest.TestCase):
         self.assertTrue(style.is_dark())
         style.theme_changed.changed.disconnect(w.library.refresh)  # store closes in tearDown
         w.deleteLater()
+        QCoreApplication.processEvents()
+
+    def test_collapsible_sidebar_and_theme_button(self):
+        settings.set_theme("auto")
+        style.apply(_app, "auto")
+        w = MainWindow(self.store, check_updates=False)
+        self.assertEqual(w.sidebar.width(), 190)
+        w.toggle_nav()
+        self.assertTrue(settings.nav_collapsed())
+        self.assertEqual(w.sidebar.width(), 52)
+        self.assertEqual(w.nav.item(0).text(), "")
+        self.assertEqual(w.nav.item(0).toolTip(), "Library")
+        self.assertEqual(w.nav.item(0).data(Qt.ItemDataRole.AccessibleTextRole), "Library")
+        w2 = MainWindow(self.store, check_updates=False)  # remembered for next start
+        self.assertEqual(w2.sidebar.width(), 52)
+        w.toggle_nav()
+        self.assertEqual((w.sidebar.width(), w.nav.item(0).text()), (190, "Library"))
+
+        w.cycle_theme()
+        self.assertEqual((settings.theme(), style.is_dark()), ("light", False))
+        self.assertEqual(w.settings_view.theme.currentData(), "light")  # Settings follows the button
+        w.cycle_theme()
+        self.assertEqual((settings.theme(), style.is_dark()), ("dark", True))
+        self.assertIn("Theme: Dark", w.theme_btn.text())
+        w.cycle_theme()
+        self.assertEqual(settings.theme(), "auto")
+        for window in (w, w2):
+            style.theme_changed.changed.disconnect(window.library.refresh)
+            window.deleteLater()
         QCoreApplication.processEvents()
 
 

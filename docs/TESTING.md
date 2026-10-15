@@ -39,6 +39,11 @@ Offscreen Qt (`QT_QPA_PLATFORM=offscreen`, no window opens):
   picker auto-detect and manual picks on a synthetic article page (`test_picker.py`); builder auto-detect,
   phone country, save and run against `/sections` (`test_builder.py`); back / forward / reload
   (`test_builder.py`). Phone country rules (`test_clean.py`).
+- JavaScript sites (v0.7): fetcher render path, cache key, block and retry rules with a fake renderer
+  (`test_fetcher.py`); builder saves a `/js-list` recipe for browser runs and a run through
+  `app/render.py` collects it; renderer reports HTTP status (`test_builder.py`).
+- Sidebar and theme button (v0.7): collapse remembered, accessible names, theme cycle synced with Settings
+  (`test_app_shell.py`).
 - Find & delete person (v0.6): matching, hashed keys and the version 1 to 2 schema upgrade
   (`test_privacy.py`); delete then re-run skips the person without fetching their page (`test_runner.py`);
   dialog (`test_app_shell.py`).

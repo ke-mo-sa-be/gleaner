@@ -168,6 +168,9 @@ Field rules:
   that group: `:scope > h3:nth-of-type(1)` is the heading, `:scope > p:nth-of-type(2)` the second
   paragraph, `:scope` the whole section. List fields may then use `label` without `label_scope`: the value
   after "Label:" on a line of the section's text; a value ending in a comma continues on the next line.
+- `render_js` (v0.7): set by the builder when the site builds its list with JavaScript. Runs then open
+  each page in Gleaner's browser; those pages are cached under the key `<url>#gleaner-rendered`, apart
+  from the plain HTML.
 - `phone_country` (optional, v0.6, default `"91"`): 1-3 digit country calling code used for phone numbers
   written without one. Numbers starting with `+` or `00` keep their own code; a leading trunk `0` is
   dropped. Export writes `+<code><number>`.

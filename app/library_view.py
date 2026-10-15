@@ -181,8 +181,9 @@ class LibraryView(QWidget):
         self.import_btn = button("Import recipe...")
         self.share_btn = button("Share recipe...", tooltip="Save this recipe as a file a colleague can import")
         self.master_btn = button("Master list...", tooltip="All recipes in one Excel file, duplicates removed")
-        self.person_btn = button("Find & delete person...",
+        self.person_btn = button("Find && delete person...",  # && shows one "&" (a single one underlines)
                                  tooltip="Remove someone who asked not to be listed, and never collect them again")
+        self.person_btn.setAccessibleName("Find & delete person...")
         self.delete_btn = button("Delete", "danger")
         for b in (self.new_btn, self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.master_btn,
                   self.share_btn, self.import_btn):

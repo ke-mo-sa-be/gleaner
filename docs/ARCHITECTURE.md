@@ -65,6 +65,7 @@ Responsibilities:
 - `export.py`: Excel writer.
 - `updates.py`: read-only check of the update source (GitHub latest release or latest.json).
 - `store.py`: SQLite access (recipes, runs, pages, records, suppressions).
+- `app/render.py` (UI side): opens pages for `render_js` recipes in a hidden browser tab.
 - `privacy.py`: find & delete person matching and the hashed do-not-collect keys.
 
 ### Database
@@ -82,7 +83,7 @@ Responsibilities:
  Run view (Qt) ── thread ── core.runner ──► core.fetcher ──► website
                                  │                 │
                                  ▼                 ▼ (render_js recipes)
-                           core.extract      RenderBridge (QtWebEngine, main thread)
+                           core.extract      app/render.py PageRenderer (QtWebEngine, UI thread)
                                  │
                                  ▼
                     core.clean ──► core.export ──► Excel
@@ -139,11 +140,15 @@ Context: Extraction must work on raw HTML during runs, without a browser, for sp
 Alternatives: XPath (needs lxml), running every page in a browser (slow).
 Reason: CSS is readable, soupsieve supports the subset we generate; picker restricted to that subset.
 
-Decision: Plain HTTP for runs; sites that build their list with JavaScript are not supported in MVP.
+Decision: Plain HTTP for runs; recipes for sites that build their list with JavaScript (`render_js`) open
+pages in Gleaner's own browser (v0.7).
 Context: Some sites build content with JavaScript after the page loads.
-Reason: On Save the builder fetches the start page once as the runner will (plain HTTP) and refuses to
-save if no items are found there. `render_js` and a RenderBridge (fetch through QtWebEngine) are reserved
-for a later version.
+Reason: On Save the builder fetches the start page once with plain HTTP and compares it with what its
+browser shows; far fewer items marks the recipe `render_js`. `core.fetcher.Fetcher` takes a `renderer`
+callable; `app/render.py PageRenderer` runs on the UI thread and is called from the run thread through a
+queued signal and a threading.Event. Pacing, robots, block and blank checks stay in `core/fetcher.py`, so
+core stays Qt-free. Rendered pages are cached under `<url>#gleaner-rendered`. Images are not loaded; the
+browser's User-Agent carries the `Gleaner/<version>` token.
 
 Decision: Picker results travel as console messages tagged with a random per-session token.
 Context: QWebChannel needs its script exposed to the page; the picker runs in an isolated world instead.
