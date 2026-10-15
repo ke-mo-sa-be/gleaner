@@ -170,6 +170,71 @@ class BuilderFlowTest(unittest.TestCase):
         result = run_recipe(self.store, saved[0], fetcher)
         self.assertEqual((result.status, result.records), ("done", 8))
 
+    def test_heading_list_with_phone_country(self):
+        b = self.builder
+        b.url_edit.setText(self.site.base + "/sections")
+        b.open_url()
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)
+
+        b._auto_detect()
+        wait_until(lambda: any(x.page == "list" for x in b.fields), builder=b)
+        self.assertEqual(b.item_mode, "sections")
+        self.assertEqual(b.list_type.currentData(), "sections")
+        self.assertTrue(b.item_selector.endswith("div.entry-content h3.wp-block-heading"))
+        names = [x.field.name for x in b.fields]
+        self.assertEqual(names[:2], ["Name", "Address"])
+        email = next(x.field for x in b.fields if x.field.label == "Email")
+        self.assertEqual(email.type, "email")
+        wait_until(lambda: b.preview_table.rowCount() == 3, builder=b)
+
+        b.country.setCurrentIndex(b.country.findData("234"))
+        b._country_chosen(0)
+        self.assertEqual(b.phone_country, "234")
+
+        saved = []
+        b.saved.connect(saved.append)
+        b.name_edit.setText("Fixture suppliers")
+        b._save()
+        wait_until(lambda: saved, builder=b)
+        recipe = self.store.get_recipe(saved[0])
+        self.assertEqual((recipe.item_mode, recipe.phone_country), ("sections", "234"))
+        fetcher = Fetcher(self.store, min_delay=0, max_delay=0, retry_wait=0, _min_delay_floor=0)
+        result = run_recipe(self.store, saved[0], fetcher)
+        self.assertEqual((result.status, result.records), ("done", 3))
+        rows = [r["data"] for r in self.store.records(saved[0])]
+        self.assertEqual([r["Name"] for r in rows], ["Alpha Medical Ltd", "Beta Labs", "Gamma Devices"])
+        self.assertEqual(rows[1]["Email"], "info@beta.test")
+
+        # reopening keeps the list type and country
+        b.load_recipe(saved[0])
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)  # let the robots check finish
+        self.assertEqual((b.list_type.currentData(), b.country.currentData()), ("sections", "234"))
+
+    def test_back_and_forward(self):
+        b = self.builder
+        b.url_edit.setText(self.site.base + "/list")
+        b.open_url()
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)
+        self.assertFalse(b.nav_back_btn.isEnabled())
+        b._mark_link()
+        self.click("li.item a.more")
+        wait_until(lambda: b.on_detail and b.loaded, builder=b)
+        self.assertTrue(b.nav_back_btn.isEnabled())
+
+        b._nav_back()
+        wait_until(lambda: b.loaded and not b.on_detail, builder=b)
+        self.assertEqual(b.page.url().toString(), self.site.base + "/list")
+        self.assertTrue(b.add_list_btn.isEnabled())
+        self.assertTrue(b.nav_forward_btn.isEnabled())
+
+        b._nav_forward()
+        wait_until(lambda: b.loaded and b.on_detail, builder=b)
+        self.assertTrue(b.add_detail_btn.isEnabled())
+
+        b._reload()
+        wait_until(lambda: b.loaded, builder=b)
+        self.assertTrue(b.on_detail)
+
     def test_local_address_rejected_without_test_flag(self):
         b = builder_view.BuilderView(self.store)
         b.url_edit.setText(self.site.base + "/list")

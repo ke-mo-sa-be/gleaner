@@ -42,6 +42,21 @@ def detail(i):
                 f"<tr><td>Address :</td><td>{i} Main Rd, Bengaluru 5600{i:02d}</td></tr></table>")
 
 
+# A directory written as headings with paragraphs under them (like many blog-style supplier lists).
+SUPPLIERS = [
+    ("Alpha Medical Ltd", "3 Market St, Lagos", "Email: hello@alpha.test<br>Phone: 0803 000 0001"),
+    ("Beta Labs", "Suite 4, Abuja", "Phone: +234 818 707 3185<br>Email: info@beta.test"),
+    ("Gamma Devices", "Plot 9, Port Harcourt", "Email: gamma@gamma.test<br>Phone: 0705 111 2222"),
+]
+
+
+def sections_page():
+    body = "".join(f'<h3 class="wp-block-heading">{name}</h3><p>{address}</p><div class="ad"></div><p>{contact}</p>'
+                   for name, address, contact in SUPPLIERS)
+    return page(f'<article><div class="entry-content"><h2>Suppliers</h2>{body}<h2>Read also</h2>'
+                f"<p>Other lists</p></div></article>")
+
+
 class Handler(BaseHTTPRequestHandler):
     hits: Counter = Counter()
 
@@ -80,6 +95,8 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, listing([1, 2, 3, 4], detail_prefix="/blank/"))
         if path.startswith("/blank/"):
             return self.send(200, "")
+        if path == "/sections":
+            return self.send(200, sections_page())
         if path == "/empty-list":
             return self.send(200, page("<p>No results</p>"))
         return self.send(404, page("not found"))

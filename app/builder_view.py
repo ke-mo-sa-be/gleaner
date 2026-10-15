@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from urllib.parse import urlsplit
 
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
+from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
                                QListWidget, QMessageBox, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
@@ -20,8 +21,13 @@ from core.recipe import Detail, Field, Pagination, Recipe, RecipeError, check_ur
 
 log = logging.getLogger(__name__)
 
-FIELD_TYPES = [("Text", "text"), ("Link", "link"), ("Phone", "phone"), ("Email", "email"),
+FIELD_TYPES = [("Text", "text"), ("Link", "link"), ("Image", "image"), ("Phone", "phone"), ("Email", "email"),
                ("Pincode", "pincode"), ("Number", "number")]
+LIST_TYPES = [("Repeating items", "elements"), ("Headings with text below", "sections")]
+COUNTRIES = [("India +91", "91"), ("Nigeria +234", "234"), ("Kenya +254", "254"), ("Ghana +233", "233"),
+             ("South Africa +27", "27"), ("UAE +971", "971"), ("Saudi Arabia +966", "966"), ("UK +44", "44"),
+             ("USA / Canada +1", "1"), ("Australia +61", "61"), ("Singapore +65", "65"),
+             ("Bangladesh +880", "880"), ("Sri Lanka +94", "94"), ("Nepal +977", "977")]
 SENSITIVE = re.compile(r"birth|\bdob\b|aadha?ar|\bpan\b|bank|account\s*(no|number)|ifsc|card\s*(no|number)", re.I)
 EMAIL_LIKE = re.compile(r"[\w.+-]+@[\w-]+\.[\w.]+")
 PREVIEW_ROWS = 10
@@ -61,6 +67,20 @@ def guess_type(sample):
         return "pincode"
     if len(digits) >= 10 and len(digits) >= 0.7 * len(re.sub(r"\s", "", sample)):
         return "phone"
+    return "text"
+
+
+def type_for_label(label):
+    """Column type for a 'Label: value' field, from the label's words."""
+    text = (label or "").lower()
+    if re.search(r"phone|tel|mobile|cell|whatsapp|contact no", text):
+        return "phone"
+    if re.search(r"e-?mail", text):
+        return "email"
+    if re.search(r"web|site|url", text):
+        return "link"
+    if re.search(r"pin ?code|postal|zip", text):
+        return "pincode"
     return "text"
 
 
@@ -112,6 +132,19 @@ class BuilderView(QWidget):
         root.setContentsMargins(12, 12, 12, 12)
 
         top = QHBoxLayout()
+        self.nav_back_btn = button("◀", tooltip="Back (Alt+Left)")
+        self.nav_forward_btn = button("▶", tooltip="Forward (Alt+Right)")
+        self.reload_btn = button("⟳", tooltip="Reload this page")
+        for b, name in ((self.nav_back_btn, "Back"), (self.nav_forward_btn, "Forward"), (self.reload_btn, "Reload")):
+            b.setFixedWidth(36)
+            b.setAccessibleName(name)
+            top.addWidget(b)
+        self.nav_back_btn.clicked.connect(self._nav_back)
+        self.nav_forward_btn.clicked.connect(self._nav_forward)
+        self.reload_btn.clicked.connect(self._reload)
+        QShortcut(QKeySequence("Alt+Left"), self, activated=self._nav_back)
+        QShortcut(QKeySequence("Alt+Right"), self, activated=self._nav_forward)
+        top.addSpacing(8)
         top.addWidget(label("Recipe name"))
         self.name_edit = QLineEdit()
         self.name_edit.setPlaceholderText("e.g. Shops - Pune - Electronics")
@@ -145,6 +178,27 @@ class BuilderView(QWidget):
         self.help_btn.clicked.connect(lambda: self.help_requested.emit("builder"))
         help_row.addWidget(self.help_btn)
         side.addLayout(help_row)
+
+        types = QHBoxLayout()
+        types.addWidget(label("List type"))
+        self.list_type = QComboBox()
+        for text, value in LIST_TYPES:
+            self.list_type.addItem(text, value)
+        self.list_type.setToolTip("Headings with text below: each heading (for example a company name) starts an "
+                                  "item, and the paragraphs under it belong to it")
+        self.list_type.activated.connect(self._list_type_chosen)
+        types.addWidget(self.list_type)
+        types.addSpacing(12)
+        types.addWidget(label("Phone country"))
+        self.country = QComboBox()
+        for text, value in COUNTRIES:
+            self.country.addItem(text, value)
+        self.country.addItem("Other...", "other")
+        self.country.setToolTip("Used for phone numbers written without a country code")
+        self.country.activated.connect(self._country_chosen)
+        types.addWidget(self.country)
+        types.addStretch(1)
+        side.addLayout(types)
 
         side.addWidget(label("List page", "h2"))
         row = QHBoxLayout()
@@ -274,6 +328,9 @@ class BuilderView(QWidget):
         self.recipe_id = None
         self.max_records = 0
         self.item_selector = None
+        self.item_mode = "elements"
+        self.phone_country = "91"
+        self._last_detail_url = None
         self.fields: list[BuilderField] = []
         self.pagination = Pagination()
         self.start_urls: list[str] = []
@@ -291,6 +348,7 @@ class BuilderView(QWidget):
         self._render_fields()
         self._render_pagination()
         self._render_start_pages()
+        self._render_list_options()
         self._fill_preview([], [])
         self._instruct(INSTRUCTIONS["idle"])
         self._update_buttons()
@@ -301,6 +359,8 @@ class BuilderView(QWidget):
         self.recipe_id = recipe_id
         self.max_records = recipe.max_records
         self.item_selector = recipe.item_selector
+        self.item_mode = recipe.item_mode
+        self.phone_country = recipe.phone_country
         link = recipe.detail.link_field if recipe.detail else None
         self.fields = [BuilderField("list", f, found="saved", is_link=f.name == link) for f in recipe.list_fields]
         if recipe.detail:
@@ -312,6 +372,7 @@ class BuilderView(QWidget):
         self._render_fields()
         self._render_pagination()
         self._render_start_pages()
+        self._render_list_options()
         self.dirty = False
         self.open_url()
 
@@ -335,6 +396,8 @@ class BuilderView(QWidget):
             start_url=pages[0],
             start_urls=list(pages) if len(pages) > 1 else [],
             item_selector=self.item_selector or "",
+            item_mode=self.item_mode,
+            phone_country=self.phone_country,
             list_fields=list_fields,
             pagination=self.pagination,
             detail=Detail(link, detail_fields) if link and detail_fields else None,
@@ -414,7 +477,100 @@ class BuilderView(QWidget):
         self.view.setUrl(QUrl(url))
 
     def _go_detail(self, url):
+        self._last_detail_url = url
         self._navigate(url, detail=True)
+
+    # ---- back / forward / reload -------------------------------------------------------------
+
+    def _back_target(self):
+        """The nearest earlier page that is a real, different page (not the blank start or a repeat)."""
+        history = self.view.history()
+        current = self.page.url().toString()
+        for item in reversed(history.backItems(50)):
+            url = item.url().toString()
+            if url not in ("", "about:blank") and url != current:
+                return item
+        return None
+
+    def _can_go_back(self):
+        return self._back_target() is not None
+
+    def _nav_back(self):
+        item = self._back_target()
+        if item is None:
+            return
+        self.loaded = False
+        self._target_url = None
+        self.on_detail = False  # back from an item page lands on the list
+        self._update_buttons()
+        self.view.history().goToItem(item)
+
+    def _nav_forward(self):
+        history = self.view.history()
+        if not history.canGoForward():
+            return
+        target = history.forwardItem().url().toString()
+        self.loaded = False
+        self._target_url = None
+        self.on_detail = bool(self._last_detail_url) and target == self._last_detail_url
+        self._update_buttons()
+        self.view.forward()
+
+    def _reload(self):
+        if self.page.url().toString() not in ("", "about:blank"):
+            self.loaded = False
+            self._update_buttons()
+            self.view.reload()
+
+    # ---- list type and phone country ---------------------------------------------------------
+
+    def _render_list_options(self):
+        self.list_type.setCurrentIndex(max(0, self.list_type.findData(self.item_mode)))
+        index = self.country.findData(self.phone_country)
+        if index < 0:
+            self.country.insertItem(self.country.count() - 1, f"+{self.phone_country}", self.phone_country)
+            index = self.country.findData(self.phone_country)
+        self.country.setCurrentIndex(index)
+
+    def _list_type_chosen(self, _index):
+        mode = self.list_type.currentData()
+        if mode == self.item_mode:
+            return
+        if any(b.page == "list" for b in self.fields):
+            answer = QMessageBox.question(self, "Change list type?",
+                                          "Changing the list type removes the list fields you picked. Item page "
+                                          "fields are kept. Continue?")
+            if answer != QMessageBox.StandardButton.Yes:
+                self._render_list_options()
+                return
+            self.fields = [b for b in self.fields if b.page == "detail"]
+        self.item_mode = mode
+        self.item_selector = None
+        self.dirty = True
+        if self.loaded:
+            self.page.clear_highlights()
+        self._render_fields()
+        self._update_buttons()
+        self._refresh_preview()
+        if mode == "sections":
+            self._instruct("Headings with text below: click + Add list field, then click one heading (for example "
+                           "a company name). Then add the text under it: the address, or a paragraph with "
+                           "Phone: / Email: lines.")
+
+    def _country_chosen(self, _index):
+        value = self.country.currentData()
+        if value == "other":
+            code, ok = QInputDialog.getText(self, "Phone country", "Country calling code (digits only, e.g. 49):")
+            code = (code or "").strip().lstrip("+")
+            if not ok or not code.isdigit() or not 1 <= len(code) <= 3:
+                self._render_list_options()
+                return
+            value = code
+        if value != self.phone_country:
+            self.phone_country = value
+            self.dirty = True
+            self._refresh_preview()
+        self._render_list_options()
 
     def _sample_detail_url(self):
         recipe = self.build_recipe()
@@ -447,11 +603,11 @@ class BuilderView(QWidget):
         self.view.setFocus()
 
     def _add_list_field(self):
-        self._start("list", itemSelector=self.item_selector)
+        self._start("list", itemSelector=self.item_selector, itemMode=self.item_mode)
 
     def _mark_link(self):
         row = next((i for i, b in enumerate(self.fields) if b.is_link), None)
-        self._start("link", row, itemSelector=self.item_selector)
+        self._start("link", row, itemSelector=self.item_selector, itemMode=self.item_mode)
 
     def _mark_next(self):
         self._start("next")
@@ -473,7 +629,7 @@ class BuilderView(QWidget):
             self._instruct("Go back to the list page first, then click Pick again.", error=True)
         else:
             self._start("link" if b.is_link else "list", row, itemSelector=self.item_selector,
-                        refineSteps=b.steps)
+                        refineSteps=b.steps, itemMode=self.item_mode)
 
     def _on_picked(self, p):
         _mode, row = self.pending or (None, None)
@@ -493,14 +649,30 @@ class BuilderView(QWidget):
                 if row is not None:
                     b = self.fields[row]
                     b.field.selector, b.steps, b.found = p["selector"], p["steps"], found
+                elif p.get("labels") and p.get("itemMode") == "sections":
+                    # "Email: ... / Phone: ..." lines in a section: one column per label.
+                    added = []
+                    for lab in p["labels"]:
+                        if any(b.field.label == lab for b in self.fields) or not self._sensitive_ok(lab):
+                            continue
+                        self.fields.append(BuilderField("list", Field(self._unique_name(lab), label=lab,
+                                                                      type=type_for_label(lab)),
+                                                        None, f"after '{lab}:'"))
+                        added.append(lab)
+                    found = None
+                    self._instruct(f"Added columns for: {', '.join(added) or 'nothing new'}. Remove the ones you "
+                                   "don't need.")
                 else:
-                    name = self._unique_name(p.get("hint") or "Field")
+                    image = p.get("attr") == "src"
+                    name = self._unique_name(p.get("hint") or ("Image" if image else "Field"))
                     if not self._sensitive_ok(name, sample):
                         return
-                    self.fields.append(BuilderField("list", Field(name, p["selector"], type=guess_type(sample)),
-                                                    p["steps"], found))
-                self._instruct(f"Got it: {found} have this. Rename the column in the table if you like, "
-                               "then add the next field.")
+                    field = (Field(name, p["selector"], attr="src", type="image") if image
+                             else Field(name, p["selector"], type=guess_type(sample)))
+                    self.fields.append(BuilderField("list", field, p["steps"], found))
+                if found:
+                    self._instruct(f"Got it: {found} have this. Rename the column in the table if you like, "
+                                   "then add the next field.")
             else:
                 if row is not None:
                     b = self.fields[row]
@@ -621,7 +793,9 @@ class BuilderView(QWidget):
         if not self.loaded or row < 0 or row >= len(self.fields):
             return
         b = self.fields[row]
-        if b.page == "list" and not self.on_detail and self.item_selector and b.field.selector is not None:
+        if b.page == "list" and not self.on_detail and self.item_selector and self.item_mode == "sections":
+            self.page.show_list(self.item_selector)  # fields live in virtual sections: light up the headings
+        elif b.page == "list" and not self.on_detail and self.item_selector and b.field.selector is not None:
             self.page.show_list(self.item_selector, b.field.selector)
         elif b.page == "detail" and self.on_detail and b.field.selector:
             self.page.show_one(b.field.selector)
@@ -822,14 +996,20 @@ class BuilderView(QWidget):
                     return
                 self.fields = [b for b in self.fields if b.page == "detail"]
             self.item_selector = res["itemSelector"]
+            self.item_mode = res.get("itemMode", "elements")
+            self._render_list_options()
             for f in res["fields"]:
                 sample = (f.get("samples") or [""])[0]
                 name = self._unique_name(f.get("name") or "Field")
                 if SENSITIVE.search(name) or SENSITIVE.search(sample):
                     left_out.append(name)
                     continue
-                self.fields.append(BuilderField("list", Field(name, f["selector"], type=guess_type(sample)),
-                                                f["steps"], "auto-detected"))
+                if f.get("label"):
+                    field = Field(name, label=f["label"], type=type_for_label(f["label"]))
+                else:
+                    field = Field(name, f["selector"], attr=f.get("attr", "text"),
+                                  type=f.get("type") or guess_type(sample))
+                self.fields.append(BuilderField("list", field, f.get("steps"), "auto-detected"))
             added = sum(1 for b in self.fields if b.page == "list")
             if res.get("link"):
                 link = res["link"]
@@ -839,7 +1019,8 @@ class BuilderView(QWidget):
             if res.get("pagination") and self.pagination.type == "none":
                 self.pagination = Pagination(**res["pagination"])
                 self._render_pagination()
-            message = f"Found {res['items']} items with {added} fields."
+            kind_text = "headings with text below" if self.item_mode == "sections" else "items"
+            message = f"Found {res['items']} {kind_text} with {added} fields."
             if res.get("link"):
                 message += " Each item has its own page: click Open an item, then Auto-detect again there."
             if self.pagination.type != "none":
@@ -920,6 +1101,10 @@ class BuilderView(QWidget):
 
     def _update_buttons(self):
         self._render_steps()
+        self.nav_back_btn.setEnabled(self._can_go_back())
+        self.nav_forward_btn.setEnabled(self.view.history().canGoForward())
+        self.reload_btn.setEnabled(self.page.url().toString() not in ("", "about:blank")
+                                   if hasattr(self, "page") else False)
         on_list = self.loaded and not self.on_detail
         self.auto_btn.setEnabled(self.loaded)
         self.add_start_btn.setEnabled(on_list)
