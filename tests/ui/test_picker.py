@@ -45,6 +45,26 @@ DETAIL = """<html><body><div id="profile"><table><tbody>
 </tbody></table><dl class="extra"><dt>Email</dt><dd>a@b.in</dd></dl>
 <p class="note"><span>Visiting hours</span></p></div></body></html>"""
 
+SECTIONS = """<html><body><main><article><div class="entry-content">
+<h2 class="wp-block-heading">Suppliers in Nigeria</h2>
+<div role="navigation" class="toc"><h2>Table of contents</h2><ul><li><a href="#a">Alpha</a></li></ul></div>
+<h3 class="wp-block-heading" id="a">Alpha Medical Ltd</h3>
+<p class="wp-block-paragraph">3 Market St,<br>Lagos, Nigeria.</p><div class="ad"></div><script>ads()</script>
+<p class="wp-block-paragraph">Email: hello@alpha.test,<br>sales@alpha.test<br>Phone: +2347000000001,<br>+2349000000002<br>http://www.alpha.test/</p>
+<h3 class="wp-block-heading">Beta Labs</h3>
+<p class="wp-block-paragraph">Suite 4, Abuja</p>
+<p class="wp-block-paragraph">Phone: 0818 707 3185<br>Email: info@beta.test<br>https://beta.test</p>
+<h3 class="wp-block-heading">Gamma Devices</h3>
+<p class="wp-block-paragraph">Plot 9, Port Harcourt</p>
+<p class="wp-block-paragraph">Email: gamma@gamma.test<br>Phone: 0803 000 0000<br>Fax: 0803 000 0001</p>
+<h3 class="wp-block-heading">Delta Scientific</h3>
+<p class="wp-block-paragraph">12 Ring Rd, Ibadan</p>
+<p class="wp-block-paragraph">Phone: 0705 111 2222<br>Email: info@delta.test<br>www.delta.test</p>
+<h2 class="wp-block-heading">Read also</h2><p>Other lists</p>
+</div></article></main>
+<div class="shop"><div class="card"><img src="/p/1.png" alt="one"><b>One</b></div>
+<div class="card"><img src="/p/2.png" alt="two"><b>Two</b></div></div></body></html>"""
+
 _app = None
 
 
@@ -231,6 +251,56 @@ class PickerTests(unittest.TestCase):
     def test_auto_detect_nothing_repeating(self):
         self.load("<html><body><h1>Hello</h1><p>Just one paragraph.</p></body></html>", "https://example.com/")
         self.assertEqual(self.auto()["type"], "error")
+
+    # -- section lists (headings + paragraphs) ---------------------------------------------------
+
+    def test_auto_detect_sections(self):
+        self.load(SECTIONS, "https://example.com/suppliers/")
+        res = self.auto()
+        self.assertEqual((res["type"], res["itemMode"]), ("auto", "sections"))
+        self.assertTrue(res["itemSelector"].endswith("div.entry-content h3.wp-block-heading"))
+        self.assertEqual(res["items"], 4)
+        names = [f["name"] for f in res["fields"]]
+        self.assertEqual(names[:2], ["Name", "Address"])
+        self.assertIn("Email", names)
+        self.assertIn("Phone", names)
+        self.assertIn("Website", names)
+        self.assertNotIn("Fax", names)  # only 1 of 4 sections has it
+        fields = []
+        for f in res["fields"]:
+            if f.get("label"):
+                fields.append(Field(f["name"], label=f["label"]))
+            else:
+                fields.append(Field(f["name"], f["selector"], attr=f.get("attr", "text"), type=f.get("type", "text")))
+        recipe = self.list_recipe(res["itemSelector"], *fields)
+        recipe.item_mode = "sections"
+        rows = extract_list(self.html, recipe, self.url)
+        self.assertEqual([r["Name"] for r in rows], ["Alpha Medical Ltd", "Beta Labs", "Gamma Devices", "Delta Scientific"])
+        self.assertEqual(rows[0]["Address"], "3 Market St, Lagos, Nigeria.")
+        self.assertEqual(rows[0]["Email"], "hello@alpha.test, sales@alpha.test")
+        self.assertEqual(rows[2]["Phone"], "0803 000 0000")
+
+    def test_manual_pick_in_sections(self):
+        self.load(SECTIONS, "https://example.com/suppliers/")
+        head = self.pick("list", "h3.wp-block-heading:nth-of-type(2)", itemMode="sections")
+        self.assertTrue(head["itemSelector"].endswith("div.entry-content h3.wp-block-heading"))
+        self.assertEqual(head["selector"], ":scope > h3:nth-of-type(1)")
+        contact = self.pick("list", "h3 + p + p", itemMode="sections", itemSelector=head["itemSelector"])
+        self.assertEqual(contact["labels"], ["Phone", "Email"])
+        address = self.pick("list", "h3 + p", itemMode="sections", itemSelector=head["itemSelector"])
+        recipe = self.list_recipe(head["itemSelector"], Field("Name", head["selector"]), Field("Address", address["selector"]))
+        recipe.item_mode = "sections"
+        rows = extract_list(self.html, recipe, self.url)
+        self.assertEqual(rows[1]["Address"], "Suite 4, Abuja")
+        self.assertEqual(rows[3]["Name"], "Delta Scientific")
+
+    def test_image_pick(self):
+        self.load(SECTIONS, "https://example.com/shop")
+        res = self.pick("list", "div.card img")
+        self.assertEqual((res["attr"], res["itemSelector"]), ("src", "div.shop div.card"))
+        recipe = self.list_recipe(res["itemSelector"], Field("Image", res["selector"], attr="src", type="image"))
+        self.assertEqual([r["Image"] for r in extract_list(self.html, recipe, self.url)],
+                         ["https://example.com/p/1.png", "https://example.com/p/2.png"])
 
     # -- isolation -----------------------------------------------------------------------------
 

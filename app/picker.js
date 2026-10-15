@@ -218,6 +218,142 @@
     return { type: "next", pagination };
   }
 
+  // ---- section lists: a heading plus the text after it ----------------------------------------
+  // Must match core/extract.py sections(): stop at the next list heading or any heading of the same or a
+  // higher level; scripts/styles are not part of the section.
+
+  const SECTION_SKIP = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "TEMPLATE"]);
+  const LABEL_RE = /^\s*([A-Za-zÀ-ɏ][\w .'\/&()-]{0,30}?)\s*[:\-–]\s*(.*)$/;
+  const URL_TEXT = /(https?:\/\/[^\s,;]+|www\.[^\s,;]+)/i;
+  const headLevel = (el) => (/^H[1-6]$/.test(el.tagName) ? +el.tagName[1] : 99);
+
+  function sectionNodes(head, headSel) {
+    const nodes = [head];
+    for (let n = head.nextElementSibling; n; n = n.nextElementSibling) {
+      if (n.matches(headSel) || headLevel(n) <= headLevel(head)) break;
+      if (!SECTION_SKIP.has(n.tagName)) nodes.push(n);
+    }
+    return nodes;
+  }
+
+  function headingFor(el, headSel) {
+    for (const h of document.querySelectorAll(headSel)) {
+      if (sectionNodes(h, headSel).some((n) => n.contains(el))) return h;
+    }
+    return null;
+  }
+
+  // Selector relative to the section wrapper used by core/extract.py: ":scope > p:nth-of-type(2) a".
+  function sectionPath(head, el, headSel) {
+    const nodes = sectionNodes(head, headSel);
+    const top = nodes.find((n) => n.contains(el));
+    if (!top) return null;
+    const k = nodes.filter((n) => n.tagName === top.tagName).indexOf(top) + 1;
+    const steps = [top.tagName.toLowerCase() + ":nth-of-type(" + k + ")", ...relSteps(top, el)];
+    return { selector: ":scope > " + steps.join(" "), steps };
+  }
+
+  function lines(el) {
+    return (el.innerText || el.textContent || "").split("\n").map((l) => l.replace(/\s+/g, " ").trim()).filter(Boolean);
+  }
+
+  function labelsIn(textLines) {
+    const out = [];
+    for (const line of textLines) {
+      const m = line.match(LABEL_RE);
+      if (m && !/^https?$/i.test(m[1].trim())) out.push(m[1].trim());
+    }
+    return out;
+  }
+
+  function headingSelectorFor(head) {
+    const chain = anchorChain(head, false);
+    const same = [...head.parentElement.children].filter((x) => x.tagName === head.tagName);
+    const common = goodClasses(head).filter((c) => same.every((x) => x.classList.contains(c)));
+    return (chain ? chain + " " : "") + head.tagName.toLowerCase() + common.map((c) => "." + esc(c)).join("");
+  }
+
+  function sectionPick(el) {
+    let headSel = ctx.itemSelector;
+    let head;
+    if (!headSel) {
+      head = el.closest("h1, h2, h3, h4, h5, h6");
+      if (!head) return { type: "error", message: "In a heading list, first click one of the headings (for example a company name)." };
+      headSel = headingSelectorFor(head);
+    } else {
+      head = el.closest(headSel) || headingFor(el, headSel);
+    }
+    const count = document.querySelectorAll(headSel).length;
+    if (!head || count < 2) return { type: "error", message: "That isn't inside one of the listed sections. Click inside a section under a highlighted heading." };
+    const target = mode === "link" ? el.closest("a[href]") : el;
+    if (mode === "link" && !target) return { type: "error", message: "That isn't a link. Click the link that opens one item's own page." };
+    const path = sectionPath(head, target, headSel);
+    if (!path) return { type: "error", message: "Couldn't use that element. Click the text itself." };
+    highlight([...document.querySelectorAll(headSel)]);
+    return {
+      type: mode, itemMode: "sections", itemSelector: headSel, selector: path.selector, steps: path.steps,
+      count, items: count, sample: text(target).slice(0, 80), labels: labelsIn(lines(target)),
+      attr: target.tagName === "IMG" ? "src" : "text", href: mode === "link" ? target.href : null,
+    };
+  }
+
+  function autoSections() {
+    let best = null;
+    const parents = new Set([...document.querySelectorAll("h2, h3, h4")].map((h) => h.parentElement));
+    for (const parent of parents) {
+      if (!parent || (layer && layer.contains(parent)) || parent.closest("nav, header, footer")) continue;
+      for (const tag of ["H2", "H3", "H4"]) {
+        const heads = [...parent.children].filter((c) => c.tagName === tag);
+        if (heads.length < 3) continue;
+        const sel = headingSelectorFor(heads[0]);
+        const secs = heads.map((h) => sectionNodes(h, sel));
+        const bodies = secs.map((nodes) => nodes.slice(1).map(text).join(" "));
+        const filled = bodies.filter((b) => b.length >= 10).length;
+        if (filled < 3) continue;
+        const avg = bodies.reduce((a, b) => a + Math.min(b.length, 400), 0) / bodies.length;
+        const score = Math.sqrt(filled) * avg * 9 * (filled / heads.length);
+        if (!best || score > best.score) best = { heads, sel, secs, score };
+      }
+    }
+    if (!best) return null;
+    const sample = best.secs.slice(0, 20);
+    const n = sample.length;
+    const fields = [{ selector: sectionPath(best.heads[0], best.heads[0], best.sel).selector, steps: null,
+                      name: "Name", samples: best.heads.slice(0, 3).map((h) => text(h).slice(0, 80)) }];
+    // First paragraph without "Label:" lines or web/email text: usually the address.
+    const plain = sample.filter((nodes) => {
+      const p = nodes.find((x) => x.tagName === "P");
+      return p && !labelsIn(lines(p)).length && !URL_TEXT.test(text(p)) && !text(p).includes("@");
+    });
+    if (plain.length >= Math.ceil(n / 2)) {
+      fields.push({ selector: ":scope > p:nth-of-type(1)", steps: null, name: "Address",
+                    samples: plain.slice(0, 3).map((nodes) => text(nodes.find((x) => x.tagName === "P")).slice(0, 80)) });
+    }
+    const counts = new Map();
+    sample.forEach((nodes) => {
+      const seen = new Set();
+      nodes.slice(1).forEach((node) => labelsIn(lines(node)).forEach((lab) => {
+        const key = lab.toLowerCase();
+        if (seen.has(key)) return;
+        seen.add(key);
+        if (!counts.has(key)) counts.set(key, { label: lab, n: 0 });
+        counts.get(key).n += 1;
+      }));
+    });
+    [...counts.values()].filter((c) => c.n >= Math.max(2, Math.ceil(n * 0.4))).sort((a, b) => b.n - a.n).slice(0, 10)
+      .forEach((c) => fields.push({ label: c.label, name: c.label, samples: [], steps: null }));
+    const withUrl = sample.filter((nodes) => nodes.slice(1).some((x) => URL_TEXT.test(text(x)))).length;
+    if (withUrl >= Math.max(2, Math.ceil(n * 0.4)) && !fields.some((f) => /web|site|url/i.test(f.name))) {
+      fields.push({ selector: ":scope", steps: null, name: "Website", type: "link", samples: [] });
+    }
+    const withImg = sample.filter((nodes) => nodes.some((x) => x.tagName === "IMG" || x.querySelector("img"))).length;
+    if (withImg >= Math.max(2, Math.ceil(n * 0.4))) {
+      fields.push({ selector: "img", attr: "src", steps: null, name: "Image", type: "image", samples: [] });
+    }
+    return { type: "auto", itemMode: "sections", score: best.score, itemSelector: best.sel,
+             items: best.heads.length, fields, link: null, pagination: null };
+  }
+
   // ---- auto-detect (no AI: structure heuristics) -------------------------------------------
 
   const NOT_FIELD_TAGS = new Set(["SCRIPT", "STYLE", "NOSCRIPT", "SVG", "BUTTON", "INPUT", "SELECT", "TEXTAREA",
@@ -377,7 +513,8 @@
 
     highlight(items);
     return {
-      type: "auto", itemSelector, items: document.querySelectorAll(itemSelector).length, fields,
+      type: "auto", itemMode: "elements", score: best.score, itemSelector,
+      items: document.querySelectorAll(itemSelector).length, fields,
       link: link ? { selector: link.selector, steps: link.steps, samples: link.hrefs.slice(0, 2) } : null,
       pagination,
     };
@@ -415,7 +552,15 @@
 
   function autoDetect(kind) {
     try {
-      return kind === "detail" ? autoDetail() : autoList();
+      if (kind === "detail") return autoDetail();
+      const list = autoList();
+      const secs = autoSections();
+      if (secs && (list.type !== "auto" || secs.score > list.score)) {
+        secs.pagination = list.type === "auto" ? list.pagination : null;
+        highlight([...document.querySelectorAll(secs.itemSelector)]);
+        return secs;
+      }
+      return list;
     } catch (err) {
       return { type: "error", message: "Auto-detect failed (" + err.message + "). Pick the fields by hand." };
     }
@@ -427,7 +572,9 @@
     if (!el || (layer && layer.contains(el))) return null;
     let res;
     try {
-      if (mode === "list" || mode === "link") {
+      if ((mode === "list" || mode === "link") && ctx.itemMode === "sections") {
+        res = sectionPick(el);
+      } else if (mode === "list" || mode === "link") {
         const target = mode === "link" ? el.closest("a[href]") : el;
         const item = target && itemFor(target);
         if (mode === "link" && !target) {
@@ -449,6 +596,7 @@
             items: document.querySelectorAll(itemSelector).length, sample: text(target).slice(0, 80),
             hint: hintKey ? target.getAttribute(hintKey) : null,
             href: mode === "link" ? target.href : null,
+            attr: target.tagName === "IMG" ? "src" : "text",
           };
         }
       } else if (mode === "detail") {
