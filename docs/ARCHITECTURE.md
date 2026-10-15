@@ -49,6 +49,8 @@ Responsibilities:
 - Generalise a clicked element into (item selector, field selector) pairs; count matches; highlight.
 - Return selectors that BeautifulSoup/soupsieve can evaluate (tags, classes, attributes,
   `:nth-of-type`; no `:has()`, no XPath).
+- Heading lists (v0.6): the same section rule as `core/extract.py sections()` (heading + following
+  siblings); selectors are relative to the section wrapper (`:scope > p:nth-of-type(2)`).
 
 ### core - `core/`
 Responsibilities:
@@ -62,7 +64,8 @@ Responsibilities:
   (generalised from `scraper/validate.py`).
 - `export.py`: Excel writer.
 - `updates.py`: read-only check of the update source (GitHub latest release or latest.json).
-- `store.py`: SQLite access (recipes, runs, pages, records).
+- `store.py`: SQLite access (recipes, runs, pages, records, suppressions).
+- `privacy.py`: find & delete person matching and the hashed do-not-collect keys.
 
 ### Database
 Responsibilities:
@@ -152,6 +155,17 @@ Reason: Unfinished runs are marked `interrupted` on next start and resume from t
 process-wide clock in `core/fetcher.py` keeps "one request at a time" true across a run and builder
 previews.
 
+Decision: Heading lists are extracted as virtual sections.
+Context: Many directories are articles: a heading per entry with paragraphs (and ads) in between, no
+element wraps one entry.
+Reason: `extract.sections()` groups a heading with its following siblings into a detached wrapper `<div>`,
+so the normal field machinery (selectors, labels, `:scope`) works unchanged and stays CSS.
+
+Decision: Do-not-collect list stores hashes, not values.
+Context: An erasure request must stop future collection without keeping the person's data.
+Reason: SHA-256 of normalised phone (last 9 digits), email and item key are enough to recognise the person
+on later runs and can't be read back.
+
 Decision: Label-anchored detail fields.
 Context: Profile pages often use label/value rows whose order varies between profiles (seen on drdata.in).
 Reason: A field can be "value next to the label 'Phone Number'" instead of a positional selector.
@@ -182,7 +196,8 @@ What happens if:
 
 ## 13. Distribution and updates
 
-- `py packaging/build.py`: tests, PyInstaller one-folder app (`dist/Gleaner/`), Inno Setup per-user installer
+- `py packaging/build.py`: tests, PyInstaller one-folder app (`dist/Gleaner/`), optional signing
+  (`GLEANER_SIGNTOOL_ARGS`, see SECURITY.md 12), Inno Setup per-user installer
   (`dist/installer/Gleaner-Setup-<version>.exe`, no admin rights, same AppId so it upgrades in place).
 - Version: `app/__init__.py`. Release: `gh release create v<version> <installer>` on the public repo.
 - The app reads the latest release (`core/updates.py`, default source `github:ke-mo-sa-be/gleaner`) and offers

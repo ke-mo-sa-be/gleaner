@@ -35,6 +35,13 @@ Offscreen Qt (`QT_QPA_PLATFORM=offscreen`, no window opens):
   pagination and limits (`test_runner.py`), builder add/paste/save/run (`test_builder.py`).
 - Auto-detect: tables, cards, item pages, link-heavy page noise (`test_picker.py`), builder flow end to end
   (`test_builder.py`).
+- Heading lists and images (v0.6): section extraction, label lines, lazy images (`test_extract.py`);
+  picker auto-detect and manual picks on a synthetic article page (`test_picker.py`); builder auto-detect,
+  phone country, save and run against `/sections` (`test_builder.py`); back / forward / reload
+  (`test_builder.py`). Phone country rules (`test_clean.py`).
+- Find & delete person (v0.6): matching, hashed keys and the version 1 to 2 schema upgrade
+  (`test_privacy.py`); delete then re-run skips the person without fetching their page (`test_runner.py`);
+  dialog (`test_app_shell.py`).
 UI tests are skipped when PySide6 is not installed. Look-and-feel is checked manually (section 5).
 
 Critical journeys:

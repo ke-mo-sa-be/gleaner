@@ -138,3 +138,31 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 1. Library > **Master list...**: dialog lists recipes with record counts (recipes with records ticked).
    **Create Excel** writes Master / Needs Review / Sources; banner offers Open Excel / Open folder.
 2. Library > **Share recipe...**: save dialog for `<recipe>.json`; banner explains how a colleague imports it.
+
+## Flow 14 - Heading list (headings with paragraphs)
+
+1. Builder on a page where each entry is a heading followed by paragraphs. **Auto-detect**: List type
+   switches to **Headings with text below**; headings light up; Fields: Name, Address, Email, Phone,
+   Website. Message: "Found 40 headings with text below with 5 fields."
+2. By hand: choose **List type > Headings with text below** (confirm if list fields exist: they are
+   removed). **+ Add list field**, click a heading; then click a paragraph under it. A paragraph with
+   "Email: / Phone:" lines adds one column per label: "Added columns for: Email, Phone."
+3. Clicking outside any listed section: "That isn't inside one of the listed sections."
+4. **Phone country** combo (India +91 default; Other... asks for a 1-3 digit code).
+
+## Flow 15 - Browse back and forward in the builder
+
+1. Back / Forward / Reload buttons left of the recipe name, Alt+Left / Alt+Right.
+2. Back from an item page returns to list mode (list buttons enabled). Forward to the item page returns to
+   item-page mode. Back is disabled on the first page.
+
+## Flow 16 - Find & delete person
+
+1. Library > **Find & delete person...**. Dialog: search box (phone, email or name; at least 3 characters).
+2. Results: one row per record (ticked), with recipe and the record's values. "No collected records match.
+   Nothing to delete." when empty.
+3. **Delete and don't collect again** > confirm "Delete N records for good and add this person to the
+   do-not-collect list? This can't be undone."
+4. Library banner: "Deleted N records. They are on the do-not-collect list now." with the reminder that
+   earlier Excel files must be cleaned by hand.
+5. Later runs: log line "Skipped a record on the do-not-collect list." (no personal data).

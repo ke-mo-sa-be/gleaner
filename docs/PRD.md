@@ -179,6 +179,17 @@ Acceptance Criteria:
 - Master list: several recipes in one workbook; duplicates across recipes by phone, else email.
 - Share recipe: save a recipe as a .json file; colleagues import it.
 
+### Feature 9 - Heading lists, images, phone country, browser navigation, find & delete (v0.6)
+- Heading lists: directories written as a heading per entry with paragraphs under it (blog-style supplier
+  lists) are collected with list type "Headings with text below"; auto-detect recognises them and proposes
+  Name, Address, one column per common "Label:" line (Email, Phone, ...) and Website.
+- Images: clicking a picture makes an Image column holding the picture's web address (lazy-loaded pictures
+  included). Pictures are not downloaded.
+- Phone country per recipe for numbers written without a country code (default India +91).
+- Builder Back / Forward / Reload buttons (Alt+Left / Alt+Right).
+- Find & delete person with a hashed do-not-collect list (SECURITY.md 7).
+- Optional code signing in the build (Smart App Control).
+
 ### Feature 7 - Updates
 Purpose: Get new versions to users without anyone sending files around.
 Acceptance Criteria:
@@ -193,7 +204,7 @@ Acceptance Criteria:
 The following are intentionally NOT part of this version:
 - Solving CAPTCHAs, rotating IPs, proxies/VPN integration, or any other way around a site's block.
 - Automating logins or storing website passwords (a user may sign in by hand inside the app's browser).
-- Extracting data from images or PDFs.
+- Extracting data from images or PDFs (an image's web address can be collected; its content is not read).
 - Submitting contact forms to reveal hidden contact details.
 - Scheduling, multi-user/server deployment, cloud sync.
 - macOS or Linux.
@@ -208,6 +219,7 @@ Must Have:
 - The first directory MVP re-created as a recipe and matching the CLI's output.
 - Settings (theme, speed, folders, updates), in-app guide, update check (added in v0.4).
 - Start pages, auto-detect, master list, share recipe (added in v0.5).
+- Heading lists, image columns, phone country, builder back/forward, find & delete person (added in v0.6).
 
 Nice to Have:
 - "Load more" button and infinite scroll pagination.
@@ -218,7 +230,8 @@ Future:
 - Optional AI help for column naming and irregular pages (heuristic auto-detect shipped in v0.5).
 - AI extraction fallback for pages with irregular layouts.
 - Multiple detail levels; region > city > category drill-down recipes.
-- Scheduled runs; silent auto-update; code-signed installer.
+- Scheduled runs; silent auto-update; signed releases (build support added in v0.6, needs a certificate).
+- Optional download of pictures into a folder next to the Excel file.
 
 ## 9. Success Metrics
 

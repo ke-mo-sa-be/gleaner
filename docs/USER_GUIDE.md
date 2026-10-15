@@ -50,6 +50,9 @@ for any site.
 
 Tip: what you see now is where every run will start. If you want shops in Pune only, filter to Pune first.
 
+The arrow buttons left of the recipe name work like a web browser's: **Back** and **Forward** (or Alt+Left /
+Alt+Right) and **Reload**. Going back from an item page returns you to the list page.
+
 **Step 2 - Pick the values you want from the list**
 
 Quickest way: click **Auto-detect**. Gleaner finds the repeating list, proposes its fields with column
@@ -69,6 +72,11 @@ If some items light up wrongly or are missing, select the field in the table, cl
 click the same value on a **different** item. Gleaner combines both examples.
 
 The **Preview** at the bottom shows the first 10 rows exactly as they will appear in Excel.
+
+**Pictures.** Click a picture (a logo, a photo of a product or doctor) with **+ Add list field** and Gleaner
+makes an **Image** column with the picture's web address. Open the address to see the picture. The
+picture itself is not downloaded into Excel. You can also switch any column to type **Image** in the
+**Type** column.
 
 **Step 3 - Item pages (if the list doesn't show everything)**
 
@@ -97,6 +105,35 @@ The **Preview** at the bottom shows the first 10 rows exactly as they will appea
 3. Go to the **Library** and press **Run**.
 
 The steps panel in the builder ticks off each step as you go.
+
+## Lists written as headings and paragraphs
+
+Some websites, often blog-style articles such as "Top medical equipment suppliers in Nigeria", don't
+have a list or table. Each entry is a **heading** (the company name) followed by a few **paragraphs**
+(the address, then lines like "Email: ..." and "Phone: ...").
+
+**Auto-detect** recognises this and sets **List type** to **Headings with text below**. It proposes
+**Name** (the heading), **Address** (the first plain paragraph), one column per label that most
+entries have (**Email**, **Phone**, ...) and **Website** if entries show a web address. Check the preview.
+
+To pick by hand:
+
+1. Set **List type** to **Headings with text below**.
+2. Click **+ Add list field** and click one entry's **heading**. Every heading of the list lights up.
+3. Click **+ Add list field** again and click the address paragraph under a heading.
+4. Click **+ Add list field** and click the paragraph with "Email: ... Phone: ...". Gleaner adds one
+   column per label it finds there. Remove the ones you don't need.
+
+When a label's value continues on the next line (two emails or two phone numbers, the first ending in a
+comma), both are kept in the same cell.
+
+## Phone numbers from other countries
+
+Phone numbers are written in Excel with their country code, for example +919845000000. Numbers that
+already start with + (or 00) keep their own country code. For numbers written without one, Gleaner uses
+the recipe's **Phone country** (in the builder, next to **List type**): India +91 unless you choose
+another, for example Nigeria +234 for a Nigerian directory. A leading 0 is dropped (0803 ... becomes
++234803...). Choose **Other...** to type any country code.
 
 ## Directories with many layers
 
@@ -153,8 +190,8 @@ A page here means one list page or one item page. A recipe with item pages reads
 
 Every run writes a new Excel file (older files are never overwritten). It has three sheets:
 
-- **Records**: the rows ready to use. Phone numbers are written as +91XXXXXXXXXX, emails in lower case,
-  pincodes as 6 digits.
+- **Records**: the rows ready to use. Phone numbers are written with their country code (+91XXXXXXXXXX for
+  India), emails in lower case, pincodes as 6 digits.
 - **Needs Review**: rows with a problem, for example a required field is missing or the row is a
   duplicate of an earlier one. The **Issues** column says what is wrong.
 - **Run Log**: when each run happened and how it ended.
@@ -191,6 +228,22 @@ the same day and tell your manager. Running again can turn a short block into a 
 Some sites build their list with JavaScript inside the browser. Gleaner cannot collect those yet and says so
 when you save the recipe.
 
+## Removing a person (do-not-collect list)
+
+When someone asks to be removed from your lists:
+
+1. **Library > Find & delete person...**
+2. Type their phone number (any format), email or name and press **Search**. Gleaner searches the records
+   of every recipe.
+3. Untick any records that are not this person, then click **Delete and don't collect again**.
+
+Their records are deleted for good, and Gleaner remembers them on a **do-not-collect list**: later runs
+skip them without even opening their page. The list keeps only a scrambled fingerprint (a hash) of their
+phone number and email, not the numbers themselves.
+
+Excel files you exported **before** the deletion still contain the person. Delete or edit those files by
+hand, and tell colleagues who have copies.
+
 ## Updates
 
 Gleaner can tell you when a new version is out (**Settings > Updates > Check now**, or automatically when it
@@ -214,6 +267,11 @@ and pick the fields again.
 
 **Where are my recipes and data?** **Settings > Where your files are**.
 
+**Installing on another PC says "An Application Control policy has blocked this file".** Windows Smart
+App Control (or a company policy) only runs programs signed with a publisher certificate, and this copy
+of Gleaner isn't signed yet. On a company PC, ask IT to allow Gleaner. On a home PC, wait for a signed
+version rather than turning Smart App Control off: once off, Windows can't turn it back on without a reset.
+
 **Personal data.** If you collect people's names and numbers, treat the Excel file as confidential: keep it
 on your PC, check numbers against the DND list before calling or texting, include an opt-out, and delete a
-person's details when they ask.
+person's details when they ask (**Library > Find & delete person...**).

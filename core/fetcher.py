@@ -20,7 +20,7 @@ import requests
 log = logging.getLogger(__name__)
 
 MIN_DELAY_FLOOR = 3.0  # seconds; user settings cannot go below this
-USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gleaner/0.5"
+USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Gleaner/0.6"
 
 # Pause between requests (min, max seconds) for the speed users can pick. "faster" sits on the floor;
 # there is deliberately no preset below it (docs/SECURITY.md 3).

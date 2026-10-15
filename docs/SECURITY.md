@@ -60,7 +60,12 @@ Sensitive data: names, phone numbers, emails and addresses of individual doctors
 - Storage: local only (`%LOCALAPPDATA%\Gleaner\`, `Documents\Gleaner\`). No cloud sync.
 - Retention: "Delete recipe data" removes records and cached pages for a recipe. Recommended policy:
   delete raw cache 90 days after export (Owner to confirm).
-- Deletion requests: Library has "Find & delete person" (by phone/email) across records - Nice to Have.
+- Deletion requests (v0.6): Library > "Find & delete person" searches every recipe's records by phone
+  (any format, last 9 digits), email or name; the user ticks the records, which are hard-deleted together
+  with the cached item page and cached pages containing the person's email or name. The person goes on a
+  do-not-collect list (`suppressions` table) holding only SHA-256 hashes of their phone numbers, emails
+  and item key; later runs skip them before fetching their item page. Earlier Excel exports are not touched:
+  the app tells the user to delete or edit those by hand. Skip messages contain no personal data.
 - Use: exports carry a note in the Run Log sheet: "Personal data - scrub against DND before calls/SMS,
   include opt-out, delete on request."
 
@@ -99,7 +104,13 @@ Users choose Gentle (10-20 s), Normal (5-10 s, default) or Faster (3-5 s) betwee
 per run. Presets are defined only in `core/fetcher.py` (`SPEEDS`); every preset is at or above the 3 s floor,
 and a test enforces it. There is no custom value field.
 
-## 12. Updates
+## 12. Updates and code signing
+
+- Unsigned builds are blocked by Smart App Control / App Control for Business ("An Application Control
+  policy has blocked this file", CreateProcess code 4551). Releases should be signed: `packaging/build.py`
+  signs every unsigned .exe/.dll/.pyd and the installer and uninstaller when `GLEANER_SIGNTOOL_ARGS` is set
+  (Microsoft Trusted Signing or an OV/EV certificate kept in the Windows certificate store). No certificate
+  password or key file path with a password may be placed in the repository or in environment variables.
 
 - The update check only reads version information (GitHub latest release or a `latest.json` manifest);
   it never downloads or runs anything by itself. The user clicks Download and runs the installer.

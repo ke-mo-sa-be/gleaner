@@ -34,6 +34,14 @@ Columns: url, status, html, fetched_at
 Purpose: Raw extracted values (uncleaned) per item.
 Columns: id, recipe_id, item_key, data (JSON object field_name -> raw string or null), collected_at
 
+### suppressions (schema version 2, v0.6)
+Purpose: Do-not-collect list for people deleted with Find & delete person. Runs skip any item whose keys
+match. Holds hashes only, never the phone numbers, emails or names themselves.
+Columns: id, kind (`phone`, `email`, `item`, `name`), value_hash (SHA-256 hex, unique), created_at
+Keys hashed (`core/privacy.py`): `phone:<last 9 digits>` of every phone-type field, `email:<lower-case
+email>` found in any field, `item:<recipe id>:<item_key>` when the item has its own page, and
+`name:<recipe id>:<first column, case-folded>` for items without their own page.
+
 ## 4. Relationships
 
 recipes → runs: One recipe has many runs.
@@ -62,6 +70,8 @@ Index: runs(recipe_id, id)
 Reason: Library shows last run per recipe.
 Index: records(recipe_id)
 Reason: Export reads all records of one recipe.
+Index: suppressions(value_hash) (unique constraint)
+Reason: Every collected item is checked against the list.
 
 ## 7. Data Validation
 
@@ -74,6 +84,8 @@ Reason: Export reads all records of one recipe.
 Does the system use soft deletion? No
 Deleting a recipe deletes its runs and records (cascade). Cached pages remain until "Clear cache".
 Exported Excel files are never deleted by the app.
+Find & delete person hard-deletes the person's records, their cached item page, and cached pages that
+contain their email or name, and adds their hashes to `suppressions`.
 
 ## 9. Auditing
 
@@ -92,6 +104,8 @@ Protection: Stored only on the local PC under the user's profile. Not logged. No
 See SECURITY.md for retention and handling.
 
 ## 11. Migration Rules
+
+History: version 1 = recipes, runs, pages, records. Version 2 (v0.6) adds `suppressions`.
 
 Schema changes must:
 1. Be documented here
@@ -135,7 +149,9 @@ named "drdata.in doctors" exists.
 Field rules:
 - `attr`: `text` (visible text, whitespace collapsed), `href`/`src` (resolved to absolute URL), or any
   attribute name.
-- `type`: `text`, `link`, `phone`, `email`, `pincode`, `number` - controls cleanup in export.
+- `type`: `text`, `link`, `image`, `phone`, `email`, `pincode`, `number` - controls cleanup in export.
+  `link`/`image` keep a web address (from the attribute, or the first address in the text). Images use
+  `attr: "src"`; lazy-loaded pictures (`data-src`, `data-lazy-src`, `srcset`) are understood.
 - A field has either `selector` (relative to the list item, or to the page for detail fields) or
   `label` + `label_scope` (detail only: find the row in `label_scope` whose first cell text equals
   `label` (whitespace-insensitive), take the next cell's text).
@@ -145,5 +161,15 @@ Field rules:
 - `pagination.max_pages` and `limits.max_records`: 0 means no limit.
 - `start_urls` (optional, v0.5): several start pages. When present, a run goes through each in order (with
   pagination restarting per start page) and `start_url` equals the first one. Up to 500, no duplicates.
+- `list.item_mode` (optional, v0.6): `elements` (default; each `item_selector` match is one item) or
+  `sections` (a directory written as headings and paragraphs: `item_selector` matches the headings; an
+  item is the heading plus the following siblings up to the next list heading or any heading of the same
+  or a higher level; scripts and styles are skipped). In `sections` mode, field selectors are relative to
+  that group: `:scope > h3:nth-of-type(1)` is the heading, `:scope > p:nth-of-type(2)` the second
+  paragraph, `:scope` the whole section. List fields may then use `label` without `label_scope`: the value
+  after "Label:" on a line of the section's text; a value ending in a comma continues on the next line.
+- `phone_country` (optional, v0.6, default `"91"`): 1-3 digit country calling code used for phone numbers
+  written without one. Numbers starting with `+` or `00` keep their own code; a leading trunk `0` is
+  dropped. Export writes `+<code><number>`.
 - Each stored record's `data` also holds `_start_page`: the start page it was found from (exported as the
   "Start Page" column).

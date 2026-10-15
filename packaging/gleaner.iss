@@ -26,6 +26,11 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 CloseApplications=yes
+#ifdef Sign
+; build.py passes /DSign and /Sgleaner=<signtool command> when a code signing certificate is set up.
+SignTool=gleaner
+SignedUninstaller=yes
+#endif
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
