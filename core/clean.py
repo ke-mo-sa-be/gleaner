@@ -13,21 +13,39 @@ FIXED_BEFORE = ["Record ID"]
 FIXED_AFTER = ["Source URL", "Start Page", "Collected On", "Issues"]
 
 
-def normalize_phones(raw):
-    """Return (list of '+91XXXXXXXXXX' numbers, list of rejected fragments)."""
+URL_IN_TEXT = re.compile(r"(https?://[^\s,;]+|www\.[^\s,;]+)", re.I)
+
+
+def normalize_phones(raw, country="91"):
+    """Return (numbers in +<country><number> form, rejected fragments).
+
+    Numbers written with + or 00 keep their own country code. Others get `country`; a leading 0 (trunk
+    prefix) is dropped first. India (91) keeps the strict 10-digit rule."""
     good, bad = [], []
     for chunk in PHONE_CHUNK.findall(raw or ""):
-        digits = re.sub(r"\D", "", chunk)
-        if len(digits) == 12 and digits.startswith("91"):
-            digits = digits[2:]
-        elif len(digits) == 11 and digits.startswith("0"):
-            digits = digits[1:]
-        if len(digits) == 10 and digits[0] != "0":
-            number = "+91" + digits
+        text = chunk.strip()
+        digits = re.sub(r"\D", "", text)
+        if text.startswith("+"):
+            full = digits
+        elif digits.startswith("00"):
+            full = digits[2:]
+        elif country == "91" and len(digits) == 12 and digits.startswith("91"):
+            full = digits
+        elif digits.startswith("0"):
+            full = country + digits[1:]
+        else:
+            full = country + digits
+        national = full[len(country):] if full.startswith(country) else None
+        if country == "91" and national is not None:
+            ok = len(national) == 10 and national[0] != "0"
+        else:
+            ok = 8 <= len(full) <= 15 and (national is None or len(national) >= 6)
+        if ok:
+            number = "+" + full
             if number not in good:
                 good.append(number)
         else:
-            bad.append(chunk.strip())
+            bad.append(text)
     return good, bad
 
 
@@ -36,13 +54,18 @@ def extract_pincode(text):
     return "".join(matches[-1]) if matches else None
 
 
-def clean_value(raw, field_type):
+def clean_value(raw, field_type, country="91"):
     """Return (clean value or None, issue or None). Issues only for present-but-unusable values."""
     if raw is None or not str(raw).strip():
         return None, None
     raw = " ".join(str(raw).split())
+    if field_type in ("link", "image"):
+        if raw.lower().startswith(("http://", "https://")) and " " not in raw:
+            return raw, None
+        m = URL_IN_TEXT.search(raw)  # a web address written as text, e.g. in a paragraph
+        return (m.group(1).rstrip(".)"), None) if m else (raw, None)
     if field_type == "phone":
-        good, bad = normalize_phones(raw)
+        good, bad = normalize_phones(raw, country)
         if good:
             return ", ".join(good), None
         return None, f"invalid phone {', '.join(bad) or raw!r}"
@@ -79,7 +102,7 @@ def build_rows(recipe: Recipe, records: list[dict], id_prefix="R"):
         row = {"Record ID": f"{id_prefix}-{n:05d}"}
         issues, blocking = [], False
         for f in fields:
-            value, issue = clean_value(data.get(f.name), f.type)
+            value, issue = clean_value(data.get(f.name), f.type, recipe.phone_country)
             row[f.name] = value
             if issue:
                 issues.append(f"{f.name}: {issue}")

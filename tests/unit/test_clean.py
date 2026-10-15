@@ -29,6 +29,19 @@ class CleanValueTests(unittest.TestCase):
         self.assertEqual(normalize_phones("12345678"), ([], ["12345678"]))
         self.assertEqual(clean_value("not a phone 12", "phone")[0], None)
 
+    def test_phone_country(self):
+        self.assertEqual(normalize_phones("0818 707 3185", "234"), (["+2348187073185"], []))
+        self.assertEqual(normalize_phones("+2347000000001, +2349000000002", "91"),
+                         (["+2347000000001", "+2349000000002"], []))
+        self.assertEqual(normalize_phones("0044 20 7946 0000", "91"), (["+442079460000"], []))
+        self.assertEqual(normalize_phones("919845000000", "91"), (["+919845000000"], []))
+        self.assertEqual(normalize_phones("1234 5678", "91"), ([], ["1234 5678"]))
+
+    def test_links_and_images_from_text(self):
+        self.assertEqual(clean_value("Phone: 1 http://www.alpha.test/ more", "link"), ("http://www.alpha.test/", None))
+        self.assertEqual(clean_value("https://x.test/logo.png", "image"), ("https://x.test/logo.png", None))
+        self.assertEqual(clean_value("visit www.beta.test.", "link"), ("www.beta.test", None))
+
     def test_pincode_email_number(self):
         self.assertEqual(extract_pincode("1 MAIN RD, BANGALORE 560 001 ALL DAYS"), "560001")
         self.assertEqual(clean_value("Mail: A@B.IN / a@b.in", "email"), ("a@b.in", None))

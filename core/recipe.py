@@ -9,13 +9,14 @@ from urllib.parse import urlsplit
 import soupsieve
 
 RECIPE_VERSION = 1
-FIELD_TYPES = ("text", "link", "phone", "email", "pincode", "number")
+FIELD_TYPES = ("text", "link", "image", "phone", "email", "pincode", "number")
+ITEM_MODES = ("elements", "sections")
 PAGINATION_TYPES = ("none", "next_link", "page_param")
 MAX_RECIPE_FILE_BYTES = 1_000_000
 MAX_START_PAGES = 500
 
-TOP_KEYS = ("version", "name", "start_url", "start_urls", "render_js", "list", "pagination", "detail", "dedup_keys", "limits")
-LIST_KEYS = ("item_selector", "fields")
+TOP_KEYS = ("version", "name", "start_url", "start_urls", "phone_country", "render_js", "list", "pagination", "detail", "dedup_keys", "limits")
+LIST_KEYS = ("item_selector", "item_mode", "fields")
 FIELD_KEYS = ("name", "selector", "attr", "type", "required", "label", "label_scope")
 PAGINATION_KEYS = ("type", "selector", "text", "param", "start", "max_pages")
 DETAIL_KEYS = ("link_field", "fields")
@@ -69,6 +70,10 @@ class Recipe:
     version: int = RECIPE_VERSION
     # Several start pages (e.g. one per city). Empty = just start_url. When set, they replace start_url.
     start_urls: list[str] = field(default_factory=list)
+    # "elements": each match of item_selector is one item. "sections": each match is a heading, and the item
+    # is that heading plus everything after it up to the next such heading (directories written as text).
+    item_mode: str = "elements"
+    phone_country: str = "91"  # calling code used for phone numbers written without one
 
     def start_pages(self) -> list[str]:
         return list(self.start_urls) if self.start_urls else [self.start_url]
@@ -89,6 +94,10 @@ class Recipe:
         }
         if self.start_urls:
             out["start_urls"] = list(self.start_urls)
+        if self.item_mode != "elements":
+            out["list"]["item_mode"] = self.item_mode
+        if self.phone_country != "91":
+            out["phone_country"] = self.phone_country
         if self.detail:
             out["detail"] = {
                 "link_field": self.detail.link_field,
@@ -160,6 +169,8 @@ def from_dict(data: dict) -> Recipe:
             start_url=str(top.get("start_url") or (start_urls[0] if start_urls else "")),
             start_urls=list(start_urls),
             item_selector=str(lst.get("item_selector", "")),
+            item_mode=str(lst.get("item_mode", "elements")),
+            phone_country=str(top.get("phone_country", "91")),
             list_fields=list_fields,
             pagination=Pagination(**pag),
             detail=detail,
@@ -244,8 +255,13 @@ def validate(recipe: Recipe, allow_local=False) -> None:
     if dupes:
         problems.append(f"duplicate field names {dupes}")
 
+    if recipe.item_mode not in ITEM_MODES:
+        problems.append(f"list.item_mode must be one of {ITEM_MODES}")
+    if not (recipe.phone_country.isdigit() and 1 <= len(recipe.phone_country) <= 3):
+        problems.append("phone_country must be a calling code such as 91 or 234")
+    sections = recipe.item_mode == "sections"
     detail_fields = recipe.detail.fields if recipe.detail else []
-    for where, fields, label_ok in (("list", recipe.list_fields, False), ("detail", detail_fields, True)):
+    for where, fields, label_ok in (("list", recipe.list_fields, sections), ("detail", detail_fields, True)):
         for f in fields:
             w = f"{where} field {f.name!r}"
             if not f.name.strip():
@@ -254,8 +270,8 @@ def validate(recipe: Recipe, allow_local=False) -> None:
                 problems.append(f"{w}: type must be one of {FIELD_TYPES}")
             if f.label is not None:
                 if not label_ok:
-                    problems.append(f"{w}: label fields are only allowed on detail pages")
-                if not f.label_scope:
+                    problems.append(f"{w}: label fields are only allowed on item pages and in section lists")
+                if not f.label_scope and where == "detail":
                     problems.append(f"{w}: label needs label_scope")
                 if f.selector is not None:
                     problems.append(f"{w}: use either selector or label, not both")

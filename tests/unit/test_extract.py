@@ -74,6 +74,33 @@ class ExtractTests(unittest.TestCase):
         self.assertIsNone(data["Missing"])
         self.assertNotIn("1970-01-01", data.values())
 
+    def test_sections_from_headings_and_paragraphs(self):
+        html = '''<div class="entry-content"><h2>Suppliers</h2><p>Intro text.</p>
+        <h3>Alpha Medical Ltd</h3><p>3 Market St,<br>Lagos, Nigeria.</p><div class="ad"></div>
+        <script>ads()</script>
+        <p>Email: hello@alpha.test,<br>sales@alpha.test<br>Phone: +2347000000001,<br>+2349000000002<br>
+        http://www.alpha.test/</p>
+        <h3>Beta Labs</h3><p>Suite 4, Abuja</p><p>Phone: 0818 707 3185<br>Email: info@beta.test<br>
+        https://beta.test</p><img class="logo" src="data:image/gif;base64,AA" data-src="/img/beta.png">
+        <h2>Read also</h2><p>Other lists</p></div>'''
+        r = recipe(list={"item_selector": "div.entry-content h3", "item_mode": "sections", "fields": [
+            {"name": "Company", "selector": ":scope h3"},
+            {"name": "Address", "selector": ":scope > p:nth-of-type(1)"},
+            {"name": "Email", "label": "Email", "type": "email"},
+            {"name": "Phone", "label": "Phone", "type": "phone"},
+            {"name": "Website", "selector": ":scope", "type": "link"},
+            {"name": "Logo", "selector": "img", "attr": "src", "type": "image"},
+        ]}, detail=None)
+        rows = extract_list(html, r, "https://example.com/list")
+        self.assertEqual([x["Company"] for x in rows], ["Alpha Medical Ltd", "Beta Labs"])  # "Read also" ends it
+        self.assertEqual(rows[0]["Address"], "3 Market St, Lagos, Nigeria.")
+        self.assertEqual(rows[0]["Email"], "hello@alpha.test, sales@alpha.test")
+        self.assertEqual(rows[0]["Phone"], "+2347000000001, +2349000000002")
+        self.assertEqual(rows[1]["Phone"], "0818 707 3185")
+        self.assertIn("https://beta.test", rows[1]["Website"])
+        self.assertEqual(rows[1]["Logo"], "https://example.com/img/beta.png")
+        self.assertIsNone(rows[0]["Logo"])
+
     def test_page_param(self):
         r = recipe(pagination={"type": "page_param", "param": "page", "start": 1})
         self.assertEqual(next_page_url("", r, "https://example.com/list?x=1", 1), "https://example.com/list?x=1&page=2")

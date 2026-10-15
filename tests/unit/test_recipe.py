@@ -54,6 +54,21 @@ class RecipeTests(unittest.TestCase):
         with self.assertRaises(RecipeError):
             from_dict(data)
 
+    def test_sections_mode_and_phone_country(self):
+        data = base()
+        data["list"]["item_mode"] = "sections"
+        data["list"]["fields"].append({"name": "Phone", "label": "Phone", "type": "phone"})
+        data["phone_country"] = "234"
+        recipe = from_dict(data)
+        validate(recipe)
+        self.assertEqual(from_dict(json.loads(recipe.to_json())), recipe)
+        data["list"]["item_mode"] = "paragraphs"
+        data["phone_country"] = "+234"
+        with self.assertRaises(RecipeError) as ctx:
+            validate(from_dict(data))
+        self.assertIn("item_mode", str(ctx.exception))
+        self.assertIn("phone_country", str(ctx.exception))
+
     def test_unknown_key_rejected(self):
         data = base()
         data["proxy"] = "http://x"
@@ -81,7 +96,7 @@ class RecipeTests(unittest.TestCase):
         data["list"]["fields"].append({"name": "Phone", "label": "Phone", "label_scope": "tr"})
         with self.assertRaises(RecipeError) as ctx:
             validate(from_dict(data))
-        self.assertIn("only allowed on detail", str(ctx.exception))
+        self.assertIn("only allowed on item pages and in section lists", str(ctx.exception))
 
     def test_detail_link_field_must_exist(self):
         data = base()
