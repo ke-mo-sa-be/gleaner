@@ -5,9 +5,10 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from core import privacy
 from core.recipe import Recipe, from_dict, validate
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS recipes (
     id INTEGER PRIMARY KEY,
@@ -45,6 +46,15 @@ CREATE TABLE IF NOT EXISTS records (
 );
 CREATE INDEX IF NOT EXISTS records_recipe ON records(recipe_id);
 """
+# Version 2: the do-not-collect list for deleted people. Hashes only (core/privacy.py), never values.
+SCHEMA_2 = """
+CREATE TABLE IF NOT EXISTS suppressions (
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL,
+    value_hash TEXT NOT NULL UNIQUE,
+    created_at TEXT NOT NULL
+);
+"""
 
 
 def now() -> str:
@@ -67,6 +77,9 @@ class Store:
         version = self.db.execute("PRAGMA user_version").fetchone()[0]
         if version < 1:
             self.db.executescript(SCHEMA)
+        if version < 2:
+            self.db.executescript(SCHEMA_2)
+        if version < SCHEMA_VERSION:
             self.db.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
             self.db.commit()
 
@@ -153,6 +166,63 @@ class Store:
 
     def record_count(self, recipe_id) -> int:
         return self.db.execute("SELECT COUNT(*) FROM records WHERE recipe_id = ?", (recipe_id,)).fetchone()[0]
+
+    # find & delete a person (do-not-collect list)
+    def find_person(self, query, limit=200) -> list[dict]:
+        """Collected records matching a phone number, email or name text, across all recipes."""
+        found = []
+        cur = self.db.execute(
+            "SELECT x.id, x.recipe_id, r.name, x.item_key, x.data FROM records x JOIN recipes r ON r.id = x.recipe_id "
+            "ORDER BY r.name, x.id"
+        )
+        for record_id, recipe_id, recipe_name, item_key, data in cur:
+            data = json.loads(data)
+            if privacy.matches(data, query):
+                found.append({"id": record_id, "recipe_id": recipe_id, "recipe": recipe_name,
+                              "item_key": item_key, "data": data})
+                if len(found) >= limit:
+                    break
+        return found
+
+    def delete_people(self, record_ids) -> int:
+        """Delete records, their cached pages, and add them to the do-not-collect list. Returns records deleted."""
+        recipes, deleted = {}, 0
+        for record_id in record_ids:
+            row = self.db.execute("SELECT recipe_id, item_key, data FROM records WHERE id = ?", (record_id,)).fetchone()
+            if row is None:
+                continue
+            recipe_id, item_key, data = row[0], row[1], json.loads(row[2])
+            if recipe_id not in recipes:
+                recipes[recipe_id] = self.get_recipe(recipe_id)
+            for kind, value_hash in privacy.keys_for(recipe_id, recipes[recipe_id], item_key, data):
+                self.db.execute("INSERT OR IGNORE INTO suppressions (kind, value_hash, created_at) VALUES (?, ?, ?)",
+                                (kind, value_hash, now()))
+            # Cached copies of pages showing this person: the item page (or the list page for items without
+            # one), and list pages containing their name or email. A later run fetches those again and skips them.
+            self.db.execute("DELETE FROM pages WHERE url = ?", (item_key.split("#item", 1)[0],))
+            for text in privacy.emails_in(" ".join(map(str, data.values()))) | self._names(recipes[recipe_id], data):
+                self.db.execute("DELETE FROM pages WHERE instr(lower(html), ?) > 0", (text.lower(),))
+            self.db.execute("DELETE FROM records WHERE id = ?", (record_id,))
+            deleted += 1
+        self.db.commit()
+        return deleted
+
+    @staticmethod
+    def _names(recipe, data) -> set[str]:
+        first = recipe.list_fields[0].name if recipe.list_fields else None
+        value = str(data.get(first) or "").strip() if first else ""
+        return {value} if len(value) >= 4 else set()
+
+    def is_suppressed(self, hashes) -> bool:
+        hashes = list(hashes)
+        if not hashes:
+            return False
+        marks = ",".join("?" * len(hashes))
+        row = self.db.execute(f"SELECT 1 FROM suppressions WHERE value_hash IN ({marks}) LIMIT 1", hashes).fetchone()
+        return row is not None
+
+    def suppression_count(self) -> int:
+        return self.db.execute("SELECT COUNT(*) FROM suppressions").fetchone()[0]
 
     # runs
     def start_run(self, recipe_id) -> int:

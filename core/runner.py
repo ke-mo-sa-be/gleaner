@@ -6,6 +6,7 @@ from dataclasses import dataclass
 
 import requests
 
+from core import privacy
 from core.extract import extract_detail, extract_list, next_page_url
 from core.fetcher import BlockedError, DisallowedError, EmptyPageError
 from core.recipe import Recipe
@@ -158,17 +159,28 @@ class _Crawl:
         if self.store.has_record(self.recipe_id, key):
             return
         data = dict(item)
+        if self.suppressed(key, data):  # checked before fetching the item page: no request for this person
+            return
         data["_start_page"] = start
         if detail and link:
             html = self.fetch(link)
             if html is None:
                 return
             data.update(extract_detail(html, self.recipe, link))
+            if self.suppressed(key, data):
+                return
         elif detail:
             data.update({f.name: None for f in detail.fields})
         self.store.save_record(self.recipe_id, key, data)
         self.records += 1
         self.emit("record", f"Collected record {self.records} (page {self.pages}).", key)
+
+
+    def suppressed(self, key, data) -> bool:
+        if not self.store.is_suppressed(privacy.hashes_for(self.recipe_id, self.recipe, key, data)):
+            return False
+        self.emit("skipped", "Skipped a record on the do-not-collect list.")  # no personal data in the message
+        return True
 
 
 def run_recipe(store, recipe_id, fetcher, control=None, on_progress=None, max_pages=0, max_records=0) -> RunResult:

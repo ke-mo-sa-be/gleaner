@@ -6,7 +6,7 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout,
-                               QHeaderView, QListWidget, QListWidgetItem, QMessageBox,
+                               QHeaderView, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
                                QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
 
 from app import settings, style
@@ -63,6 +63,94 @@ class MasterDialog(QDialog):
                 if self.list.item(i).checkState() == Qt.CheckState.Checked]
 
 
+class PersonDialog(QDialog):
+    """Find & delete person: remove someone's records everywhere and never collect them again (DPDP)."""
+
+    def __init__(self, store, parent=None):
+        super().__init__(parent)
+        self.store = store
+        self.found = []
+        self.deleted = 0
+        self.setWindowTitle("Find & delete person")
+        self.setMinimumSize(640, 420)
+        layout = QVBoxLayout(self)
+        layout.addWidget(label("When someone asks to be removed, search for their phone number, email or name. "
+                               "Tick their records and delete them. Gleaner then won't collect them again.",
+                               wrap=True))
+        row = QHBoxLayout()
+        self.query = QLineEdit()
+        self.query.setPlaceholderText("Phone number, email or name")
+        self.query.setAccessibleName("Search for a person")
+        self.query.returnPressed.connect(self.search)
+        row.addWidget(self.query, 1)
+        self.search_btn = button("Search", "primary")
+        self.search_btn.clicked.connect(self.search)
+        row.addWidget(self.search_btn)
+        layout.addLayout(row)
+        self.result_label = label("", "hint", wrap=True)
+        layout.addWidget(self.result_label)
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Delete", "Recipe", "Record"])
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        self.table.verticalHeader().hide()
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.table, 1)
+        layout.addWidget(label("Excel files you already exported still contain these records. Delete or edit "
+                               "those files by hand.", "hint", wrap=True))
+        buttons = QHBoxLayout()
+        buttons.addStretch(1)
+        self.delete_btn = button("Delete and don't collect again", "danger")
+        self.delete_btn.setEnabled(False)
+        self.delete_btn.clicked.connect(self.delete_ticked)
+        close = button("Close")
+        close.clicked.connect(self.accept)
+        buttons.addWidget(self.delete_btn)
+        buttons.addWidget(close)
+        layout.addLayout(buttons)
+
+    def search(self):
+        text = self.query.text().strip()
+        if len(text) < 3:
+            self.result_label.setText("Type at least 3 characters.")
+            return
+        self.found = self.store.find_person(text)
+        self.table.setRowCount(len(self.found))
+        for r, rec in enumerate(self.found):
+            tick = QTableWidgetItem()
+            tick.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled)
+            tick.setCheckState(Qt.CheckState.Checked)
+            self.table.setItem(r, 0, tick)
+            self.table.setItem(r, 1, QTableWidgetItem(rec["recipe"]))
+            summary = " | ".join(str(v) for k, v in rec["data"].items() if v and not k.startswith("_"))
+            self.table.setItem(r, 2, QTableWidgetItem(summary[:200]))  # plain text only
+        self.table.resizeColumnsToContents()
+        self.result_label.setText(f"{len(self.found)} matching records." if self.found else
+                                  "No collected records match. Nothing to delete.")
+        self.delete_btn.setEnabled(bool(self.found))
+
+    def ticked_ids(self):
+        return [rec["id"] for r, rec in enumerate(self.found)
+                if self.table.item(r, 0).checkState() == Qt.CheckState.Checked]
+
+    def delete_ticked(self):
+        ids = self.ticked_ids()
+        if not ids:
+            self.result_label.setText("Tick the records to delete.")
+            return
+        answer = QMessageBox.question(
+            self, "Delete records?",
+            f"Delete {len(ids)} records for good and add this person to the do-not-collect list?\n\n"
+            "This can't be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No, QMessageBox.StandardButton.No)
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.deleted += self.store.delete_people(ids)
+        self.table.setRowCount(0)
+        self.found = []
+        self.delete_btn.setEnabled(False)
+        self.result_label.setText(f"Deleted {len(ids)} records. Gleaner won't collect them again.")
+
+
 def _export(store, recipe_id, folder):
     return export_workbook(folder, store.get_recipe(recipe_id), store.records(recipe_id), store.runs(recipe_id))
 
@@ -93,11 +181,14 @@ class LibraryView(QWidget):
         self.import_btn = button("Import recipe...")
         self.share_btn = button("Share recipe...", tooltip="Save this recipe as a file a colleague can import")
         self.master_btn = button("Master list...", tooltip="All recipes in one Excel file, duplicates removed")
+        self.person_btn = button("Find & delete person...",
+                                 tooltip="Remove someone who asked not to be listed, and never collect them again")
         self.delete_btn = button("Delete", "danger")
         for b in (self.new_btn, self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.master_btn,
                   self.share_btn, self.import_btn):
             bar.addWidget(b)
         bar.addStretch(1)
+        bar.addWidget(self.person_btn)
         bar.addWidget(self.delete_btn)
         layout.addLayout(bar)
 
@@ -134,6 +225,7 @@ class LibraryView(QWidget):
         self.share_btn.clicked.connect(self._share)
         self.master_btn.clicked.connect(self._choose_master)
         self.delete_btn.clicked.connect(self._delete)
+        self.person_btn.clicked.connect(self._find_person)
         style.theme_changed.changed.connect(self.refresh)
         self.refresh()
 
@@ -265,6 +357,16 @@ class LibraryView(QWidget):
             return
         self.banner.show_message("success", f"Imported '{recipe.name}'.")
         self.refresh()
+
+    def _find_person(self):
+        dialog = PersonDialog(self.store, self)
+        dialog.exec()
+        if dialog.deleted:
+            self.refresh()
+            self.banner.show_message("success", f"Deleted {dialog.deleted:,} records. They are on the "
+                                                "do-not-collect list now.",
+                                     "Excel files you exported earlier still contain them: delete or edit "
+                                     "those files by hand.")
 
     def _delete(self):
         recipe_id = self.selected_id()

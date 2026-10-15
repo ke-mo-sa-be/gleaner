@@ -77,6 +77,28 @@ class RunnerTests(unittest.TestCase):
                                       self.store.records(rid), self.store.runs(rid))
         self.assertNotEqual(path, path2)
 
+    def test_deleted_person_is_not_collected_again(self):
+        rid, result = self.run_path()
+        self.assertEqual(result.records, 6)
+        found = self.store.find_person("+91 98450 00001")
+        self.assertEqual([r["data"]["Name"] for r in found], ["DR. ALPHA", "DR. ALPHA"])
+        self.assertEqual(len(self.store.find_person("dr. alpha")), 2)
+        self.assertEqual(self.store.find_person("nobody@example.com"), [])
+        self.assertEqual(self.store.delete_people([r["id"] for r in found]), 2)
+        self.assertEqual(self.store.record_count(rid), 4)
+        self.assertGreater(self.store.suppression_count(), 0)
+        self.assertIsNone(self.store.get_page(self.site.base + "/doc/1"))  # cached copy gone too
+        hashes = self.store.db.execute("SELECT value_hash FROM suppressions").fetchall()
+        self.assertTrue(all(len(h) == 64 and "98450" not in h for (h,) in hashes))  # hashes only
+
+        events = []
+        result = run_recipe(self.store, rid, self.fetcher(), on_progress=events.append)
+        self.assertEqual((result.status, result.records), ("done", 0))
+        self.assertEqual(self.store.record_count(rid), 4)
+        self.assertEqual(self.site.hits["/doc/1"], 1)  # the item page is not fetched again
+        skipped = [e.message for e in events if e.event == "skipped"]
+        self.assertEqual(skipped, ["Skipped a record on the do-not-collect list."] * 2)
+
     def test_resume_uses_cache(self):
         rid, _ = self.run_path()
         hits_after_first = dict(self.site.hits)

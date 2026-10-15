@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 try:
     from PySide6.QtCore import QCoreApplication
     from PySide6.QtWebEngineCore import QWebEngineProfile
-    from PySide6.QtWidgets import QApplication
+    from PySide6.QtWidgets import QApplication, QMessageBox
 
     from app import help_view, settings, style, web
     from app.main_window import GUIDE, SECTIONS, MainWindow
@@ -113,6 +113,30 @@ class ShellTests(unittest.TestCase):
         self.assertEqual(load_recipe(target).name, "drdata.in doctors")
         style.theme_changed.changed.disconnect(w.library.refresh)
         w.deleteLater()
+        QCoreApplication.processEvents()
+
+    def test_find_and_delete_person(self):
+        from app.library_view import LibraryView, PersonDialog
+        rid = self.store.save_recipe(load_recipe(DRDATA))
+        self.store.save_record(rid, "https://www.drdata.in/a", {"Name": "Test Person", "Phone": "98450 00001"})
+        self.store.save_record(rid, "https://www.drdata.in/b", {"Name": "Other Person", "Phone": "98450 00002"})
+        dialog = PersonDialog(self.store)
+        dialog.query.setText("+91 98450-00001")
+        dialog.search()
+        self.assertEqual(dialog.table.rowCount(), 1)
+        self.assertIn("Test Person", dialog.table.item(0, 2).text())
+        with mock.patch("app.library_view.QMessageBox.question", return_value=QMessageBox.StandardButton.Yes):
+            dialog.delete_ticked()
+        self.assertEqual((dialog.deleted, self.store.record_count(rid)), (1, 1))
+        dialog.query.setText("Test Person")
+        dialog.search()
+        self.assertEqual(dialog.table.rowCount(), 0)
+        self.assertFalse(dialog.delete_btn.isEnabled())
+        dialog.deleteLater()
+        library = LibraryView(self.store)
+        self.assertTrue(library.person_btn.isEnabled())
+        style.theme_changed.changed.disconnect(library.refresh)
+        library.deleteLater()
         QCoreApplication.processEvents()
 
     def test_main_window_sections_and_help_routing(self):
