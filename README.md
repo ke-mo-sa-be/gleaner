@@ -18,6 +18,8 @@ products, members, professionals, ...) into clean Excel files, politely and safe
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
+- v0.7: Sites that build their list with JavaScript (runs open pages in Gleaner's browser), collapsible
+  sidebar, theme button on every screen.
 - v0.6: Directories written as headings and paragraphs, image columns, phone country per recipe, Back /
   Forward in the builder, Find & delete person with a do-not-collect list, optional code signing in the build.
 - v0.5: Auto-detect (list, fields, item link, next page, item-page labels), several start pages per recipe,
@@ -25,7 +27,7 @@ Full history: [CHANGELOG.md](CHANGELOG.md).
 - v0.4: engine (recipes, polite fetcher, extraction, resumable runner, cleanup, Excel export); desktop app
   (Library, point-and-click Recipe builder, Run with speed choice, Guide, Settings with light/dark theme and
   update check); Windows installer.
-- 102 automated tests including offscreen UI tests.
+- 109 automated tests including offscreen UI tests.
 - Next: see "Future" in [docs/PRD.md](docs/PRD.md) section 8.
 
 ## Setup

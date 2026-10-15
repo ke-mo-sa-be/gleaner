@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-15
+
 ### Added
 
 - Sites that build their list with JavaScript: instead of refusing to save, Gleaner saves the recipe for
@@ -25,6 +27,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The "Find & delete person..." button showed "Find _delete person..." (the "&" was read as a keyboard
   shortcut).
+
+### Known issues
+
+- Releases are not code-signed yet, so Windows Smart App Control blocks the installer.
 
 ## [0.6.0] - 2026-10-15
 
@@ -81,7 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cleanup of phone, email and pincode columns, Excel export with Records, Needs Review and Run Log sheets.
 - Windows installer (per user, no admin rights).
 
-[Unreleased]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/ke-mo-sa-be/gleaner/releases/tag/v0.4.0
