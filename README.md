@@ -16,6 +16,8 @@ products, members, professionals, ...) into clean Excel files, politely and safe
 
 ## Status
 
+Full history: [CHANGELOG.md](CHANGELOG.md).
+
 - v0.6: Directories written as headings and paragraphs, image columns, phone country per recipe, Back /
   Forward in the builder, Find & delete person with a do-not-collect list, optional code signing in the build.
 - v0.5: Auto-detect (list, fields, item link, next page, item-page labels), several start pages per recipe,

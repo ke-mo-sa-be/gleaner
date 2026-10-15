@@ -68,6 +68,8 @@ After implementation:
 
 Update documentation when implementation changes product behavior, architecture, database schema,
 recipe format, security rules or conventions.
+Record user-visible changes in CHANGELOG.md under "Unreleased" (Keep a Changelog 1.1.0); a release moves
+them to a dated version section.
 
 ## 8. Conflict Handling
 
