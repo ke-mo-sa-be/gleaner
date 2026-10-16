@@ -5,7 +5,7 @@ from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout,
                                QLineEdit, QRadioButton, QScrollArea, QVBoxLayout, QWidget)
 
-from app import __version__, settings, style
+from app import __version__, adblock, settings, style, web
 from app.tasks import run_task
 from app.widgets import Banner, button, label, open_path
 from core import paths, updates
@@ -58,6 +58,16 @@ class SettingsView(QWidget):
         row.addWidget(self.theme)
         row.addStretch(1)
         layout.addLayout(row)
+
+        _section(layout, "Built-in browser")
+        self.block_ads = QCheckBox("Block ads and trackers while building recipes")
+        self.block_ads.setChecked(settings.block_ads())
+        self.block_ads.setToolTip("Pages load faster and are easier to read. Turn off if a site refuses to work "
+                                  "with ads blocked.")
+        self.block_ads.toggled.connect(self._block_ads_changed)
+        layout.addWidget(self.block_ads)
+        layout.addWidget(label("The page you open is never blocked, only ad and tracking networks. Reload the "
+                               "page after changing this.", "hint", wrap=True))
 
         _section(layout, "Collection speed",
                  "How long Gleaner waits between pages. This is the default for new runs; you can change it for "
@@ -132,6 +142,10 @@ class SettingsView(QWidget):
         layout.addWidget(label(f"Gleaner {__version__}. Collects public directory listings politely: one page at "
                                "a time, robots rules respected, stops the moment a site objects.", "hint", wrap=True))
         layout.addStretch(1)
+
+    def _block_ads_changed(self, on):
+        settings.set_block_ads(on)
+        adblock.install(web.browser_profile(), on)
 
     def _sync_theme(self):
         index = self.theme.findData(style.theme())

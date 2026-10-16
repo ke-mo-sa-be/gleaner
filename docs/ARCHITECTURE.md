@@ -66,6 +66,8 @@ Responsibilities:
 - `updates.py`: read-only check of the update source (GitHub latest release or latest.json).
 - `store.py`: SQLite access (recipes, runs, pages, records, suppressions).
 - `app/render.py` (UI side): opens pages for `render_js` recipes in a hidden browser tab.
+- `app/adblock.py` (UI side): `QWebEngineUrlRequestInterceptor` on the browser profile that drops requests to
+  hosts in `app/adblock_hosts.txt` (never the main frame), plus a profile script that hides empty ad slots.
 - `privacy.py`: find & delete person matching and the hashed do-not-collect keys.
 
 ### Database

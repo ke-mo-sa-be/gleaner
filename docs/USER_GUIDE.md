@@ -55,6 +55,10 @@ for any site.
 
 Tip: what you see now is where every run will start. If you want shops in Pune only, filter to Pune first.
 
+Gleaner's browser removes ads and pop-up ads from the pages you open, so lists are easier to see and click.
+The page itself is never changed. If a site refuses to work ("please disable your ad blocker"), turn off
+**Settings > Built-in browser > Block ads and trackers** and reload the page.
+
 The arrows left of the address work like a web browser's: **Back** and **Forward** (or Alt+Left /
 Alt+Right) and **Reload**. Going back from an item page returns you to the list page.
 

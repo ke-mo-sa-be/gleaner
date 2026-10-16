@@ -8,6 +8,7 @@ from pathlib import Path
 from PySide6.QtCore import Signal
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineProfile, QWebEngineScript
 
+from app import adblock, settings
 from core import paths
 from core.fetcher import UA_TOKEN
 
@@ -28,6 +29,7 @@ def browser_profile():
         _profile.setPersistentStoragePath(str(root / "storage"))
         _profile.setCachePath(str(root / "cache"))
         identify(_profile)
+        adblock.install(_profile, settings.block_ads())
     return _profile
 
 

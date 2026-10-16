@@ -71,6 +71,9 @@ class ShellTests(unittest.TestCase):
         settings.set_speed("warp")  # unknown values fall back to safe defaults
         self.assertEqual(settings.speed(), "normal")
         self.assertTrue((paths.data_home() / "settings.ini").exists())
+        self.assertTrue(settings.block_ads())  # ad remover on by default
+        settings.set_block_ads(False)
+        self.assertFalse(settings.block_ads())
 
     def test_theme_switch(self):
         seen = []

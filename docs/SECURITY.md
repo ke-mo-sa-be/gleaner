@@ -31,6 +31,10 @@ These are product requirements, not settings. They are enforced in `core/fetcher
   robots.txt checked for each page, block signals (HTTP status from the browser, challenge and CAPTCHA
   text) stop the run. Pictures are not loaded. No stealth: the browser is not disguised and never tries to
   hide that it is automated.
+- Ad remover (v0.9): the built-in browser drops requests to a bundled list of ad and tracking networks
+  (`app/adblock_hosts.txt`) and hides empty ad boxes. It only removes third-party requests, so it lowers the
+  load a page puts on other servers; it never touches the site's own requests, never changes the page's HTML
+  and is not used to get around blocks or paywalls. Users can switch it off in Settings.
 - A recipe whose last run was blocked requires explicit confirmation to run again (UX Flow 5).
 
 ## 4. Secrets

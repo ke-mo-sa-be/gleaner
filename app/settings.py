@@ -87,6 +87,14 @@ def set_guide_seen(value: bool = True):
     _set("guide_seen", "true" if value else "false")
 
 
+def block_ads() -> bool:
+    return str(_get("block_ads", "true")).lower() == "true"
+
+
+def set_block_ads(value: bool):
+    _set("block_ads", "true" if value else "false")
+
+
 def nav_collapsed() -> bool:
     return str(_get("nav_collapsed", "false")).lower() == "true"
 

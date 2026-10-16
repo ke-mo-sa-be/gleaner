@@ -105,6 +105,11 @@ class Handler(BaseHTTPRequestHandler):
             return self.send(200, listing([1, 2, 3, 4], detail_prefix="/blank/"))
         if path.startswith("/blank/"):
             return self.send(200, "")
+        if path == "/ads-page":  # ads served from "localhost", the page from 127.0.0.1
+            port = self.server.server_address[1]
+            return self.send(200, page(f'<div id="main">Real content</div><ins class="adsbygoogle">AD</ins>'
+                                       f'<img src="http://localhost:{port}/ad.png">'
+                                       f'<script src="http://localhost:{port}/ad.js"></script>'))
         if path == "/js-list":
             return self.send(200, js_list_page())
         if path == "/sections":

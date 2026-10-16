@@ -94,6 +94,8 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 
 1. User opens **Settings**.
 2. **Theme**: Match Windows / Light / Dark. Applies at once; Match Windows follows Windows when it switches.
+   **Built-in browser**: "Block ads and trackers while building recipes" (on by default); applies to pages
+   opened after the change (reload).
    The theme button at the bottom of the sidebar (any screen, Ctrl+Shift+T) cycles the same three; Settings
    follows it.
 3. **Collection speed**: Gentle / Normal / Faster, each with its trade-off in one sentence. This is the

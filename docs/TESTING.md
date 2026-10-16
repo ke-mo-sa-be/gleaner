@@ -44,6 +44,8 @@ Offscreen Qt (`QT_QPA_PLATFORM=offscreen`, no window opens):
   `app/render.py` collects it; renderer reports HTTP status (`test_builder.py`).
 - Sidebar and theme button (v0.7): collapse remembered, accessible names, theme cycle synced with Settings
   (`test_app_shell.py`).
+- Ad remover (v0.9): host matching and libraries not blocked; a fixture page's ad requests never reach the
+  server, page content kept, ad box hidden, switch off (`test_adblock.py`).
 - Find & delete person (v0.6): matching, hashed keys and the version 1 to 2 schema upgrade
   (`test_privacy.py`); delete then re-run skips the person without fetching their page (`test_runner.py`);
   dialog (`test_app_shell.py`).

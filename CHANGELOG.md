@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Ad remover in the built-in browser: ads, pop-up ads and trackers from well-known networks are blocked and
+  empty ad boxes hidden while you build recipes (and during browser runs). The page itself is never
+  changed. Switch it off in Settings > Built-in browser.
+
 ## [0.8.0] - 2026-10-16
 
 ### Changed

@@ -9,6 +9,7 @@ a = Analysis(
     datas=[
         (str(ROOT / "app" / "picker.js"), "app"),
         (str(ROOT / "app" / "icons"), "app/icons"),
+        (str(ROOT / "app" / "adblock_hosts.txt"), "app"),
         (str(ROOT / "recipes"), "recipes"),
         (str(ROOT / "docs" / "USER_GUIDE.md"), "docs"),
     ],
