@@ -9,7 +9,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtCore import QCoreApplication, Qt
+    from PySide6.QtCore import QCoreApplication, QEvent, Qt
     from PySide6.QtWebEngineCore import QWebEngineProfile
     from PySide6.QtWidgets import QApplication, QMessageBox
 
@@ -24,6 +24,14 @@ from core.recipe import load_recipe
 from core.store import Store
 
 DRDATA = Path(__file__).resolve().parents[2] / "recipes" / "drdata.json"
+
+def dispose(widget):
+    """Destroy a widget now. deleteLater() alone would destroy it during a later test, while its browser
+    page may still be sending signals."""
+    widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QCoreApplication.processEvents()
+
 _app = None
 
 
@@ -115,7 +123,7 @@ class ShellTests(unittest.TestCase):
             w.library._share()
         self.assertEqual(load_recipe(target).name, "drdata.in doctors")
         style.theme_changed.changed.disconnect(w.library.refresh)
-        w.deleteLater()
+        dispose(w)
         QCoreApplication.processEvents()
 
     def test_find_and_delete_person(self):
@@ -135,11 +143,11 @@ class ShellTests(unittest.TestCase):
         dialog.search()
         self.assertEqual(dialog.table.rowCount(), 0)
         self.assertFalse(dialog.delete_btn.isEnabled())
-        dialog.deleteLater()
+        dispose(dialog)
         library = LibraryView(self.store)
         self.assertTrue(library.person_btn.isEnabled())
         style.theme_changed.changed.disconnect(library.refresh)
-        library.deleteLater()
+        dispose(library)
         QCoreApplication.processEvents()
 
     def test_main_window_sections_and_help_routing(self):
@@ -161,7 +169,43 @@ class ShellTests(unittest.TestCase):
         self.assertEqual(settings.theme(), "dark")
         self.assertTrue(style.is_dark())
         style.theme_changed.changed.disconnect(w.library.refresh)  # store closes in tearDown
-        w.deleteLater()
+        dispose(w)
+        QCoreApplication.processEvents()
+
+    def test_update_alert_and_update_now(self):
+        from app import updater
+        from core.updates import UpdateInfo
+        w = MainWindow(self.store, check_updates=False)
+        info = UpdateInfo("9.9.0", "https://example.com/Gleaner-Setup-9.9.0.exe", "### New" + chr(10) + "- Faster", "ab" * 32)
+        with mock.patch.object(updater, "can_install", return_value=True):
+            w._update_found(info)
+            self.assertTrue(w.update_box.isVisible())
+            self.assertIn("9.9.0", w.update_box.text())
+            self.assertEqual([b.text() for b in w.update_box.buttons()][:1], ["Update now"])
+            self.assertIn("Faster", w.update_box.informativeText())
+            w.update_box.close()
+            # a run in progress: nothing closes, the user is told
+            with (
+                mock.patch.object(type(w.run_view), "running", new_callable=mock.PropertyMock, return_value=True),
+                mock.patch("app.main_window.QMessageBox.information") as told,
+            ):
+                self.assertFalse(w._ready_to_update())
+            told.assert_called_once()
+            # downloaded and confirmed: the installer starts and Gleaner closes
+            with (
+                mock.patch.object(updater, "launch_installer") as launch,
+                mock.patch("app.updater.QMessageBox.question", return_value=QMessageBox.StandardButton.Ok),
+                mock.patch.object(w, "_quit_for_update") as quit_,
+            ):
+                w.updater.quit = quit_
+                w.updater._downloaded(info, Path(self.tmp.name) / "Gleaner-Setup-9.9.0.exe")
+            launch.assert_called_once()
+            self.assertIn("/VERYSILENT", updater.INSTALL_ARGS)
+            quit_.assert_called_once()
+        with mock.patch.object(updater, "can_install", return_value=False):
+            self.assertEqual(updater.action_label(info), "Download")  # from source: open the download instead
+        style.theme_changed.changed.disconnect(w.library.refresh)
+        dispose(w)
         QCoreApplication.processEvents()
 
     def test_collapsible_sidebar_and_theme_button(self):
@@ -190,7 +234,7 @@ class ShellTests(unittest.TestCase):
         self.assertEqual(settings.theme(), "auto")
         for window in (w, w2):
             style.theme_changed.changed.disconnect(window.library.refresh)
-            window.deleteLater()
+            dispose(window)
         QCoreApplication.processEvents()
 
 

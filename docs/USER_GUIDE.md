@@ -77,6 +77,10 @@ If Auto-detect picks the wrong list or misses a value, pick by hand:
 3. Double-click the column's name and rename it, for example "Shop name".
 4. Repeat for other values on the list page: city, category, phone if it is shown.
 
+**Check a column on the page.** Click a column under **Columns**: every value it finds is outlined, the page
+scrolls to the first one and it flashes, so you can see exactly what Gleaner will collect. Click a row in the
+**Preview** to jump to that item on the page.
+
 If some items light up wrongly or are missing, select the column, click **Pick again** and
 click the same value on a **different** item. Gleaner combines both examples.
 
@@ -134,8 +138,13 @@ To pick by hand:
 4. Click **+ Add field** and click the paragraph with "Email: ... Phone: ...". Gleaner adds one
    column per label it finds there. Remove the ones you don't need.
 
-When a label's value continues on the next line (two emails or two phone numbers, the first ending in a
-comma), both are kept in the same cell.
+Different words for the same thing go into one column: "Phone:", "Tel:" and "Telephone:" all fill **Phone**;
+"Mobile:"/"Cell:", "Fax:", "Email:"/"E-mail:" and "Website:"/"Web:" get their own columns. When a value
+continues on the next line (a second phone number or email under the first), both are kept in the same cell.
+Emails written as name[at]site.com are cleaned to name@site.com in Excel.
+
+Gleaner ignores side bars, "related posts" boxes and comments when it looks for the list. If you set **List
+type** to **Headings with text below** yourself, Auto-detect only looks for that.
 
 ## Phone numbers from other countries
 
@@ -264,9 +273,13 @@ hand, and tell colleagues who have copies.
 
 ## Updates
 
-Gleaner can tell you when a new version is out (**Settings > Updates > Check now**, or automatically when it
-starts). Click **Download**, close Gleaner, and run the new installer. Your recipes, collected data and Excel
-files are kept.
+When Gleaner starts it checks for a new version and, if there is one, says so in a small window. Click
+**Update now**: Gleaner downloads the new version (you see the progress), checks that it is the genuine file,
+then closes, updates and opens again by itself, in about a minute. Your recipes, collected data and Excel files
+are kept. **Later** keeps working; the Library shows the update until you install it.
+
+You can also look yourself: **Settings > Updates > Check now**. If a collection run is going, stop it (or let it
+finish) before updating.
 
 ## Questions and fixes
 

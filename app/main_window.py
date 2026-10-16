@@ -10,7 +10,8 @@ from app.builder_view import BuilderView
 from app.help_view import HelpView
 from app.library_view import LibraryView
 from app.run_view import RunView
-from app.settings_view import SettingsView, open_update
+from app import updater
+from app.settings_view import SettingsView
 from app.tasks import run_task
 from app.widgets import glyph_icon
 from core import updates
@@ -35,6 +36,9 @@ class MainWindow(QMainWindow):
         self.run_view = RunView(store)
         self.help_view = HelpView()
         self.settings_view = SettingsView()
+        self._updater = None  # made when an update starts
+        self._updating = False
+        self.update_box = None
 
         self.nav_collapsed = settings.nav_collapsed()
         self.nav = QListWidget()
@@ -91,6 +95,7 @@ class MainWindow(QMainWindow):
         self.run_view.run_finished.connect(self.library.refresh)
         for view in (self.library, self.builder, self.settings_view):
             view.help_requested.connect(self.show_help)
+        self.settings_view.update_requested.connect(self.update_now)
         self.nav.setCurrentRow(LIBRARY)
         self._render_sidebar()
 
@@ -164,11 +169,51 @@ class MainWindow(QMainWindow):
         run_task(updates.check, source, __version__, on_done=self._update_found, on_failed=lambda _m: None)
 
     def _update_found(self, info):
-        if info is not None:
-            self.library.show_update(info, lambda: open_update(info))
-            self.statusBar().showMessage(f"Gleaner {info.version} is available. See the Library.", 15000)
+        if info is None:
+            return
+        self.library.show_update(info, lambda: self.update_now(info), updater.action_label(info))
+        self.statusBar().showMessage(f"Gleaner {info.version} is available.", 15000)
+        # Tell the user right away, without blocking the window.
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Icon.Information)
+        box.setWindowTitle("Update available")
+        box.setText(f"Gleaner {info.version} is available. You have {__version__}.")
+        notes = "\n".join(line.lstrip("#").strip() for line in (info.notes or "").splitlines() if line.strip())
+        box.setInformativeText((notes[:400] + ("..." if len(notes) > 400 else "") + "\n\n" if notes else "")
+                               + "Your recipes, collected data and Excel files are kept.")
+        update_btn = box.addButton(updater.action_label(info), QMessageBox.ButtonRole.AcceptRole)
+        box.addButton("Later", QMessageBox.ButtonRole.RejectRole)
+        box.setDefaultButton(update_btn)
+        box.buttonClicked.connect(lambda clicked: clicked is update_btn and self.update_now(info))
+        box.open()
+        self.update_box = box
+
+    @property
+    def updater(self):
+        if self._updater is None:
+            self._updater = updater.Updater(self, self._ready_to_update, self._quit_for_update)
+        return self._updater
+
+    def update_now(self, info):
+        self.updater.update(info)
+
+    def _ready_to_update(self) -> bool:
+        if self.run_view.running:
+            QMessageBox.information(self, "A run is in progress",
+                                    "Gleaner is collecting. Stop the run (or let it finish), then click Update now "
+                                    "again. The new installer is already downloaded.")
+            return False
+        return self.builder.confirm_discard()
+
+    def _quit_for_update(self):
+        self._updating = True  # the checks are done; don't ask again on close
+        self.close()
+        QApplication.instance().quit()
 
     def closeEvent(self, event):
+        if self._updating:
+            event.accept()
+            return
         if self.run_view.running:
             answer = QMessageBox.question(
                 self, "A run is in progress",

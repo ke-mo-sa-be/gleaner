@@ -114,12 +114,19 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 ## Flow 10 - Update to a new version
 
 1. Gleaner starts and quietly checks the update source (if enabled in Settings).
-2. Newer version found: Library banner "Gleaner 0.5.0 is available" with **Download** / **Later**.
+2. Newer version found: a small window "Gleaner 0.9.0 is available. You have 0.8.0." with the release notes,
+   **Update now** / **Later** (it doesn't block the app), plus a Library banner with the same buttons.
    No message when there is no update or the PC is offline.
-3. **Download** opens the installer link in the browser (or the installer in the shared folder).
-4. User closes Gleaner and runs the installer; it replaces the program and keeps recipes, data and Excel
-   files.
-5. **Settings > Updates > Check now** does the same on demand and explains problems in plain language.
+3. **Update now**: progress window "Downloading... 40 of 143 MB" with Cancel. The file is kept only if its
+   SHA-256 matches the one published with the release; otherwise "The downloaded installer doesn't match the
+   published version, so it was deleted. Try again later."
+4. "Gleaner 0.9.0 is ready to install. Gleaner will close, update and open again (about a minute)." OK /
+   Cancel. A running collection blocks this ("Stop the run, then click Update now again"); unsaved recipe
+   changes are asked about first.
+5. The installer runs silently, replaces the program, keeps recipes, data and Excel files, and starts Gleaner.
+6. When Gleaner runs from source (developers) or the source gives no checksum, the button reads **Download**
+   and opens the installer link instead.
+7. **Settings > Updates > Check now** does the same on demand and explains problems in plain language.
 
 ## Flow 11 - Auto-detect
 
@@ -172,6 +179,16 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
 4. Library banner: "Deleted N records. They are on the do-not-collect list now." with the reminder that
    earlier Excel files must be cleaned by hand.
 5. Later runs: log line "Skipped a record on the do-not-collect list." (no personal data).
+
+## Flow 20 - Check a column on the page (v0.9)
+
+1. Builder: click a column under Columns. Its values are outlined on the page; the page scrolls smoothly to the
+   first one, which flashes. Instruction: "'Phone' is outlined on the page (22 found). The flashing one is the
+   first." Nothing found: "'Phone' isn't on this page. Pick again to fix it, or Remove it."
+2. Works for list columns, heading-list columns (label or position in the section) and item-page columns
+   (by position or by label). A column of the other page type: "Open the item page to see where 'Phone' is."
+3. Click a Preview row: the page scrolls to that item and outlines it (in heading lists: the heading and its
+   paragraphs).
 
 ## Flow 19 - Recipe builder layout (v0.8)
 

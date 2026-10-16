@@ -262,10 +262,10 @@ class LibraryView(QWidget):
         settings.set_guide_seen(True)
         self.guide_banner.hide()
 
-    def show_update(self, info, on_download):
+    def show_update(self, info, on_update, action="Update now"):
         self.banner.show_message("info", f"Gleaner {info.version} is available (you have an older version).",
                                  info.notes[:300] if info.notes else "",
-                                 [("Download", on_download), ("Later", self.banner.hide)])
+                                 [(action, on_update), ("Later", self.banner.hide)])
 
     def refresh(self):
         selected = self.selected_id()

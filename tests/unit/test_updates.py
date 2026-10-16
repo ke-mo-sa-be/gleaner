@@ -83,5 +83,75 @@ class GitHubTests(unittest.TestCase):
             check("github:not a repo", "0.4.0")
 
 
+
+
+
+class DownloadTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.folder = Path(self.tmp.name)
+        self.installer = self.folder / "share" / "Gleaner-Setup-0.9.0.exe"
+        self.installer.parent.mkdir()
+        self.installer.write_bytes(b"MZ" + b"x" * 300_000)
+        import hashlib
+        self.sha = hashlib.sha256(self.installer.read_bytes()).hexdigest()
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_shared_folder_copy_verified(self):
+        seen = []
+        info = updates.UpdateInfo("0.9.0", str(self.installer), sha256=self.sha)
+        path = updates.download(info, self.folder / "updates", lambda done, total: seen.append((done, total)))
+        self.assertEqual(path.read_bytes(), self.installer.read_bytes())
+        self.assertEqual(seen[-1], (300_002, 300_002))
+        self.assertFalse(list((self.folder / "updates").glob("*.part")))
+
+    def test_mismatch_is_deleted(self):
+        info = updates.UpdateInfo("0.9.0", str(self.installer), sha256="0" * 64)
+        with self.assertRaises(UpdateError):
+            updates.download(info, self.folder / "updates")
+        self.assertEqual(list((self.folder / "updates").iterdir()), [])
+
+    def test_https_needs_a_published_checksum(self):
+        info = updates.UpdateInfo("0.9.0", "https://example.com/Gleaner-Setup-0.9.0.exe")
+        self.assertFalse(info.can_download)
+        with self.assertRaises(UpdateError):
+            updates.download(info, self.folder / "updates")
+        page = updates.UpdateInfo("0.9.0", "https://github.com/o/r/releases/v0.9.0", sha256=self.sha)
+        self.assertFalse(page.can_download)  # a release page, not an installer
+
+    def test_https_stream_verified(self):
+        body = self.installer.read_bytes()
+
+        class Stream:
+            status_code = 200
+            headers = {"Content-Length": str(len(body))}
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *exc):
+                return False
+
+            def iter_content(self, size):
+                for i in range(0, len(body), size):
+                    yield body[i:i + size]
+
+        info = updates.UpdateInfo("0.9.0", "https://example.com/Gleaner-Setup-0.9.0.exe", sha256=self.sha)
+        with mock.patch.object(updates.requests, "get", return_value=Stream()):
+            path = updates.download(info, self.folder / "updates")
+        self.assertEqual(path.name, "Gleaner-Setup-0.9.0.exe")
+
+    def test_github_digest_is_read(self):
+        release = {"tag_name": "v0.9.0", "body": "", "html_url": "https://github.com/o/r/releases/v0.9.0",
+                   "assets": [{"name": "Gleaner-Setup-0.9.0.exe", "digest": "sha256:" + "AB" * 32,
+                               "browser_download_url": "https://github.com/o/r/releases/download/v0.9.0/G.exe"}]}
+        with mock.patch.object(updates.requests, "get", return_value=FakeResponse(200, release)):
+            info = check("github:o/r", "0.8.0")
+        self.assertEqual(info.sha256, "ab" * 32)
+        self.assertTrue(info.can_download)
+
+
 if __name__ == "__main__":
     unittest.main()

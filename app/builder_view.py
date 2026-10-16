@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+import shiboken6
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWebEngineWidgets import QWebEngineView
@@ -563,12 +564,20 @@ class BuilderView(QWidget):
         self.open_btn.setEnabled(True)
         self._instruct(message, error=True)
 
+    def _alive(self) -> bool:
+        """False while the builder is being destroyed (closing the app): the page can still send signals."""
+        return shiboken6.isValid(self) and shiboken6.isValid(self.view)
+
     def _on_load_started(self):
+        if not self._alive():
+            return
         self.loaded = False
         self._update_buttons()
         self.preview_label.setText("Preview - loading page..." if self._target_url or self.loaded else "Preview")
 
     def _on_loaded(self, ok):
+        if not self._alive():
+            return
         url = self.page.url().toString()
         if url == "about:blank":
             # A navigation requested while the blank page was still loading can be dropped by the engine;
@@ -600,6 +609,8 @@ class BuilderView(QWidget):
                           and self._refresh_preview())
 
     def _on_url_changed(self, qurl):
+        if not self._alive():
+            return
         if qurl.toString() != "about:blank":  # the address bar shows the page in the browser, like any browser
             self.url_edit.setText(qurl.toString())
 

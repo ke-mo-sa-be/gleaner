@@ -121,8 +121,12 @@ and a test enforces it. There is no custom value field.
   (Microsoft Trusted Signing or an OV/EV certificate kept in the Windows certificate store). No certificate
   password or key file path with a password may be placed in the repository or in environment variables.
 
-- The update check only reads version information (GitHub latest release or a `latest.json` manifest);
-  it never downloads or runs anything by itself. The user clicks Download and runs the installer.
+- The update check only reads version information (GitHub latest release or a `latest.json` manifest).
+  Nothing is downloaded until the user clicks Update now (v0.9). The installer is then downloaded over https
+  (or copied from the shared folder) and kept only if its SHA-256 matches the digest GitHub publishes for the
+  release asset (or `sha256` in latest.json); an https installer without a published checksum is never run,
+  the user gets the download link instead. Gleaner then starts that installer silently and closes; it
+  never runs anything else it downloaded.
 - Remote manifests and installer links must be https; shared-folder paths are allowed.
 - The GitHub source must be a public repository. No token is ever stored in the app.
 - Failures at start-up are silent; Check now shows a plain-language reason.

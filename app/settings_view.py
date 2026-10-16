@@ -1,22 +1,13 @@
 """Settings: appearance, default speed, where files go, updates, tutorial, about."""
 
-from PySide6.QtCore import QUrl, Signal
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (QApplication, QButtonGroup, QCheckBox, QComboBox, QFileDialog, QFrame, QHBoxLayout,
                                QLineEdit, QRadioButton, QScrollArea, QVBoxLayout, QWidget)
 
-from app import __version__, adblock, settings, style, web
+from app import __version__, adblock, settings, style, updater, web
 from app.tasks import run_task
 from app.widgets import Banner, button, label, open_path
 from core import paths, updates
-
-
-def open_update(info):
-    """Open the installer: a download link in the browser, or the file in a shared folder."""
-    if info.url.lower().startswith("https://"):
-        QDesktopServices.openUrl(QUrl(info.url))
-    else:
-        open_path(info.url)
 
 
 def _section(layout, title, hint=None):
@@ -28,6 +19,7 @@ def _section(layout, title, hint=None):
 
 class SettingsView(QWidget):
     help_requested = Signal(str)
+    update_requested = Signal(object)  # UpdateInfo: the main window runs Update now
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -188,8 +180,8 @@ class SettingsView(QWidget):
             self.update_banner.show_message(
                 "info", f"Gleaner {info.version} is available.",
                 (info.notes[:400] + "\n\n" if info.notes else "") +
-                "Download it, close Gleaner, then run the installer. Your recipes and data are kept.",
-                [("Download", lambda: open_update(info))])
+                "Gleaner downloads it, closes, updates and opens again. Your recipes and data are kept.",
+                [(updater.action_label(info), lambda: self.update_requested.emit(info))])
 
     def _failed(self, message):
         self.check_btn.setEnabled(True)

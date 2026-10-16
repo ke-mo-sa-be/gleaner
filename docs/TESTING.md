@@ -44,6 +44,15 @@ Offscreen Qt (`QT_QPA_PLATFORM=offscreen`, no window opens):
   `app/render.py` collects it; renderer reports HTTP status (`test_builder.py`).
 - Sidebar and theme button (v0.7): collapse remembered, accessible names, theme cycle synced with Settings
   (`test_app_shell.py`).
+- Heading lists (v0.9): a sidebar with big widgets doesn't win over the list, labels grouped (Phone|Tel),
+  continuation lines, website column holds just the address, chosen list type respected; columns and
+  preview rows scroll the page to the match (`test_picker.py`); label alternatives and continuation
+  (`test_extract.py`); name[at]site emails (`test_clean.py`).
+- Update now (v0.9): verified download from a shared folder and over https (mocked), checksum mismatch
+  deletes the file, https without checksum refused, GitHub digest read (`test_updates.py`); startup alert,
+  run-in-progress guard, installer started with silent flags (`test_app_shell.py`).
+- UI tests destroy their windows at once (`dispose()`), so a window from one test can't be destroyed in the
+  middle of the next.
 - Ad remover (v0.9): host matching and libraries not blocked; a fixture page's ad requests never reach the
   server, page content kept, ad box hidden, switch off (`test_adblock.py`).
 - Find & delete person (v0.6): matching, hashed keys and the version 1 to 2 schema upgrade

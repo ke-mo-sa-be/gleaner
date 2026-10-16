@@ -152,6 +152,9 @@ Field rules:
 - `type`: `text`, `link`, `image`, `phone`, `email`, `pincode`, `number` - controls cleanup in export.
   `link`/`image` keep a web address (from the attribute, or the first address in the text). Images use
   `attr: "src"`; lazy-loaded pictures (`data-src`, `data-lazy-src`, `srcset`) are understood.
+- In `sections` lists, `label` may list several words for the same value, separated by `|` ("Phone|Tel"):
+  the first line starting with any of them is used. An unlabeled next line of the same kind (another phone
+  number or email) continues the value.
 - A field has either `selector` (relative to the list item, or to the page for detail fields) or
   `label` + `label_scope` (detail only: find the row in `label_scope` whose first cell text equals
   `label` (whitespace-insensitive), take the next cell's text).

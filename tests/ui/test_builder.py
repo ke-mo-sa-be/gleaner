@@ -12,7 +12,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PySide6.QtCore import QCoreApplication
+    from PySide6.QtCore import QCoreApplication, QEvent
     from PySide6.QtWidgets import QApplication
 
     from PySide6.QtWebEngineCore import QWebEngineProfile
@@ -27,6 +27,14 @@ from core.fetcher import BlockedError, Fetcher
 from core.runner import run_recipe
 from core.store import Store
 from tests.integration.fixture_site import FixtureSite
+
+
+def dispose(widget):
+    """Destroy a widget now. deleteLater() alone would destroy it during a later test, while its browser
+    page may still be sending signals."""
+    widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    QCoreApplication.processEvents()
 
 _app = None
 
@@ -65,7 +73,7 @@ class BuilderFlowTest(unittest.TestCase):
 
     def tearDown(self):
         builder_view.FETCHER_OPTIONS.clear()
-        self.builder.deleteLater()
+        dispose(self.builder)
         QCoreApplication.processEvents()
         self.store.close()
         self.site.__exit__(None, None, None)
@@ -310,7 +318,7 @@ class BuilderFlowTest(unittest.TestCase):
         b.url_edit.setText(self.site.base + "/list")
         b.open_url()
         self.assertIn("local network", b.instruction.text())
-        b.deleteLater()
+        dispose(b)
 
 
 if __name__ == "__main__":

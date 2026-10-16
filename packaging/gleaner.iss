@@ -44,3 +44,11 @@ Name: "{autodesktop}\{#AppName}"; Filename: "{app}\Gleaner.exe"; Tasks: desktopi
 
 [Run]
 Filename: "{app}\Gleaner.exe"; Description: "{cm:LaunchProgram,{#AppName}}"; Flags: nowait postinstall skipifsilent
+; Update now (app/updater.py) installs silently with /RELAUNCH=1: open Gleaner again afterwards.
+Filename: "{app}\Gleaner.exe"; Flags: nowait; Check: RelaunchAfterUpdate
+
+[Code]
+function RelaunchAfterUpdate(): Boolean;
+begin
+  Result := WizardSilent() and (ExpandConstant('{param:RELAUNCH|0}') = '1');
+end;

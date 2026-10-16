@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Ad remover in the built-in browser: ads, pop-up ads and trackers from well-known networks are blocked and
   empty ad boxes hidden while you build recipes (and during browser runs). The page itself is never
   changed. Switch it off in Settings > Built-in browser.
+- Update now: Gleaner downloads the new version itself, checks it against the checksum published with the
+  release, then closes, updates and opens again. A small window says when an update is available at start.
+- Selecting a column outlines its values on the page, scrolls to the first one and makes it flash; clicking a
+  preview row scrolls to that item.
+
+### Changed
+
+- Headings with text below: Auto-detect ignores side bars, related-post boxes and comments, and looks only for
+  heading lists when you chose that list type. Phone/Tel/Telephone go into one Phone column (Mobile, Fax, Email
+  and Website get their own), a second number or email on the next line is kept, and the Website column holds
+  just the web address.
+- Emails written as name[at]site.com are cleaned to name@site.com.
 
 ## [0.8.0] - 2026-10-16
 
