@@ -76,6 +76,16 @@ Placeholder: Muted Text, example values ("e.g. https://www.example.com/doctors")
 Banners for run outcomes: 12px padding, Large radius, left 4px stripe in Success/Warning/Error colour,
 title in Body Semibold, details collapsible.
 
+## 10a. Look (v0.8)
+
+Minimal, flat, roomy. Content sits on Surface cards (1px Border, 10px radius) over the Background.
+Inputs and buttons: 6px radius. Buttons come in four kinds: primary (filled, one per area: Open, Auto-detect,
+Save recipe, New recipe, Run, Start), default (outlined), quiet (text only, for secondary actions such as
+Pick again, Remove, Import) and link (How does this work?). Rarely used actions go in a "More" menu.
+Steps are underline tabs. Tables have no grid lines, 36-40px rows, Muted headers. Thin scrollbars.
+Prefer hiding a control that can't be used yet over showing it disabled, when hiding doesn't shift the
+layout the user is working in. Font: Segoe UI Variable Text (Windows 11), Segoe UI otherwise.
+
 ## 11. Navigation
 
 Header: none (native title bar).

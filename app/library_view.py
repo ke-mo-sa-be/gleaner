@@ -6,8 +6,8 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import (QAbstractItemView, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout,
-                               QHeaderView, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
-                               QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget)
+                               QHeaderView, QLineEdit, QListWidget, QListWidgetItem, QMenu, QMessageBox,
+                               QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
 from app import settings, style
 from app.tasks import friendly_error, run_task, with_store
@@ -167,30 +167,50 @@ class LibraryView(QWidget):
         self.rows = []
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 20, 24, 20)
-        layout.addWidget(label("Recipes", "h1"))
-        layout.addWidget(label("A recipe tells Gleaner what to collect from one website. "
-                               "Make one once, then run it any time.", "hint", wrap=True))
+        layout.setContentsMargins(28, 22, 28, 22)
+        layout.setSpacing(12)
 
-        bar = QHBoxLayout()
-        self.new_btn = button("New recipe", "primary")
-        self.run_btn = button("Run")
-        self.edit_btn = button("Edit")
-        self.dup_btn = button("Duplicate")
-        self.export_btn = button("Export to Excel")
-        self.import_btn = button("Import recipe...")
-        self.share_btn = button("Share recipe...", tooltip="Save this recipe as a file a colleague can import")
-        self.master_btn = button("Master list...", tooltip="All recipes in one Excel file, duplicates removed")
-        self.person_btn = button("Find && delete person...",  # && shows one "&" (a single one underlines)
+        # Header: title on the left, actions for the whole library on the right.
+        head = QHBoxLayout()
+        titles = QVBoxLayout()
+        titles.setSpacing(2)
+        titles.addWidget(label("Recipes", "h1"))
+        titles.addWidget(label("A recipe tells Gleaner what to collect from one website. "
+                               "Make one once, then run it any time.", "hint", wrap=True))
+        head.addLayout(titles, 1)
+        self.person_btn = button("Find && delete person...", "quiet",  # && shows one "&" (one alone underlines)
                                  tooltip="Remove someone who asked not to be listed, and never collect them again")
         self.person_btn.setAccessibleName("Find & delete person...")
-        self.delete_btn = button("Delete", "danger")
-        for b in (self.new_btn, self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.master_btn,
-                  self.share_btn, self.import_btn):
+        self.import_btn = button("Import recipe...", "quiet")
+        self.master_btn = button("Master list...", tooltip="All recipes in one Excel file, duplicates removed")
+        self.new_btn = button("New recipe", "primary")
+        for b in (self.person_btn, self.import_btn, self.master_btn, self.new_btn):
+            head.addWidget(b, 0, Qt.AlignmentFlag.AlignBottom)
+        layout.addLayout(head)
+
+        # Actions for the selected recipe; the rarer ones sit in the More menu.
+        bar = QHBoxLayout()
+        self.run_btn = button("Run", "primary")
+        self.edit_btn = button("Edit")
+        self.export_btn = button("Export to Excel")
+        self.more_btn = QToolButton()
+        self.more_btn.setObjectName("more")
+        self.more_btn.setText("More  ▾")
+        self.more_btn.setToolTip("Duplicate, share or delete the selected recipe")
+        self.more_btn.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(self.more_btn)
+        self.dup_btn = menu.addAction("Duplicate")
+        self.share_btn = menu.addAction("Share recipe...")
+        self.share_btn.setToolTip("Save this recipe as a file a colleague can import")
+        menu.addSeparator()
+        self.delete_btn = menu.addAction("Delete...")
+        self.more_btn.setMenu(menu)
+        self.selected_label = label("", "hint")
+        for b in (self.run_btn, self.edit_btn, self.export_btn, self.more_btn):
             bar.addWidget(b)
+        bar.addSpacing(8)
+        bar.addWidget(self.selected_label)
         bar.addStretch(1)
-        bar.addWidget(self.person_btn)
-        bar.addWidget(self.delete_btn)
         layout.addLayout(bar)
 
         self.banner = Banner()
@@ -208,6 +228,10 @@ class LibraryView(QWidget):
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().hide()
+        self.table.verticalHeader().setDefaultSectionSize(40)
+        self.table.setShowGrid(False)
+        self.table.setAlternatingRowColors(True)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
         self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.table.doubleClicked.connect(lambda _i: self._edit())
@@ -220,12 +244,12 @@ class LibraryView(QWidget):
         self.new_btn.clicked.connect(lambda: self.edit_requested.emit(None))
         self.edit_btn.clicked.connect(self._edit)
         self.run_btn.clicked.connect(self._run)
-        self.dup_btn.clicked.connect(self._duplicate)
+        self.dup_btn.triggered.connect(self._duplicate)
         self.export_btn.clicked.connect(self._export)
         self.import_btn.clicked.connect(self._import)
-        self.share_btn.clicked.connect(self._share)
+        self.share_btn.triggered.connect(self._share)
         self.master_btn.clicked.connect(self._choose_master)
-        self.delete_btn.clicked.connect(self._delete)
+        self.delete_btn.triggered.connect(self._delete)
         self.person_btn.clicked.connect(self._find_person)
         style.theme_changed.changed.connect(self.refresh)
         self.refresh()
@@ -272,8 +296,11 @@ class LibraryView(QWidget):
     def _update_buttons(self):
         has = self.selected_id() is not None
         self.master_btn.setEnabled(bool(self.rows))
-        for b in (self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.share_btn, self.delete_btn):
+        for b in (self.run_btn, self.edit_btn, self.dup_btn, self.export_btn, self.share_btn, self.delete_btn,
+                  self.more_btn):
             b.setEnabled(has)
+        row = next((r for r in self.rows if r["id"] == self.selected_id()), None)
+        self.selected_label.setText(row["name"] if row else "Select a recipe to run, edit or export it.")
 
     def _edit(self):
         if self.selected_id() is not None:

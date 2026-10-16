@@ -24,18 +24,19 @@ chapters show how, step by step.
 
 ## The three kinds of page
 
-Almost every directory website is built from three kinds of page. Gleaner has one button for each.
+Almost every directory website is built from three kinds of page. The Recipe builder has one step (a tab
+on the right) for each: **List**, **Item page** and **More pages**. A tick appears on a step when it is done.
 
 **1. The list page.** Many items one under the other: a table, cards or a list. Each item shows a few
 details (a name, a city) and often a link such as "View details".
-Button: **+ Add list field**.
+Step **List**: **Auto-detect**, **+ Add field**, **Mark item link**.
 
 **2. The item page.** What opens when you click one item. It shows the full details of that one item:
 phone, address, email.
-Buttons: **Mark item link** (on the list page) and **+ Add item field** (on the item page).
+Step **Item page**: **Open an item**, then **Auto-detect** or **+ Add field** there.
 
 **3. More pages of the list.** "Next", "2 3 4 ...", "Older results" at the bottom of the list.
-Button: **Mark next page**.
+Step **More pages**: **Mark next page**, and start pages.
 
 You only need what your website has. A site that shows everything on the list page needs no item page.
 A site with one short list needs no next page.
@@ -48,67 +49,68 @@ for any site.
 **Step 1 - Open the list page**
 
 1. Go to **Recipe builder** (or **Library > New recipe**).
-2. Type the website address in **Website address** and press **Open**.
+2. Type the website address in the address bar at the top and press **Open**.
 3. In the built-in browser, go to the list you want. Use the site's own search boxes and filters (city,
    category) as you normally would, until you see the list of items you want.
 
 Tip: what you see now is where every run will start. If you want shops in Pune only, filter to Pune first.
 
-The arrow buttons left of the recipe name work like a web browser's: **Back** and **Forward** (or Alt+Left /
+The arrows left of the address work like a web browser's: **Back** and **Forward** (or Alt+Left /
 Alt+Right) and **Reload**. Going back from an item page returns you to the list page.
 
 **Step 2 - Pick the values you want from the list**
 
 Quickest way: click **Auto-detect**. Gleaner finds the repeating list, proposes its fields with column
 names, finds the link to each item's own page and the next-page link. Check the **Preview** at the bottom,
-remove fields you don't need (select, **Remove field**) and rename columns. Anything that looks like a date
+remove columns you don't need (select one, **Remove**) and rename columns. Anything that looks like a date
 of birth, ID or bank detail is left out automatically.
 
 If Auto-detect picks the wrong list or misses a value, pick by hand:
 
-1. Click **+ Add list field**. The mouse becomes a cross.
-2. Click on one shop's **name**. Every shop's name lights up in orange, and the field appears in the
-   **Fields** table with "15 of 15 items" (or similar).
-3. Click the name in the **Column name** cell and rename it, for example "Shop name".
+1. On the **List** step, click **+ Add field**. The mouse becomes a cross.
+2. Click on one shop's **name**. Every shop's name lights up in orange, and the column appears under
+   **Columns** (point at it to see "15 of 15 items" or similar).
+3. Double-click the column's name and rename it, for example "Shop name".
 4. Repeat for other values on the list page: city, category, phone if it is shown.
 
-If some items light up wrongly or are missing, select the field in the table, click **Pick again** and
+If some items light up wrongly or are missing, select the column, click **Pick again** and
 click the same value on a **different** item. Gleaner combines both examples.
 
 The **Preview** at the bottom shows the first 10 rows exactly as they will appear in Excel.
 
-**Pictures.** Click a picture (a logo, a photo of a product or doctor) with **+ Add list field** and Gleaner
+**Pictures.** Click a picture (a logo, a photo of a product or doctor) with **+ Add field** and Gleaner
 makes an **Image** column with the picture's web address. Open the address to see the picture. The
 picture itself is not downloaded into Excel. You can also switch any column to type **Image** in the
 **Type** column.
 
 **Step 3 - Item pages (if the list doesn't show everything)**
 
-1. On the list page, click **Mark item link**, then click the link or button that opens one shop
+1. On the **List** step, click **Mark item link**, then click the link or button that opens one shop
    ("View", "Details", the shop's name, ...).
-2. Gleaner opens that shop's page. Click **Auto-detect** again: it proposes every "label: value" pair on
-   the page (Phone, Address, Email, ...). Or click **+ Add item field** and click a value, for example
-   the phone number.
-3. If the page shows details as label and value ("Phone: 98450 00000"), the **Found** column says
+2. Gleaner opens that shop's page and switches to the **Item page** step. Click **Auto-detect**: it
+   proposes every "label: value" pair on the page (Phone, Address, Email, ...). Or click **+ Add field**
+   and click a value, for example the phone number.
+3. If the page shows details as label and value ("Phone: 98450 00000"), pointing at the column shows
    "next to 'Phone'". That is good: it will work for every shop even if their pages are laid out a little
    differently.
 4. Add the other values you need (address, email, ...). Rename the columns.
-5. Click **Back to list**. Click **Preview item pages** to check the first 3 items (takes about 30 seconds,
-   because Gleaner fetches them politely).
+5. Click **Back to list**. Click **Preview item pages** (above the preview) to check the first 3 items
+   (takes about 30 seconds, because Gleaner fetches them politely).
 
 **Step 4 - More pages (if the list continues)**
 
-1. On the list page, click **Mark next page**.
+1. On the list page, open the **More pages** step and click **Mark next page**.
 2. Click the site's **Next** button, or the link to page **2**.
-3. Under the buttons you will see how Gleaner will move: "by page number" or "the 'Next' link".
+3. Next to the button you will see how Gleaner will move: "by page number" or "the 'Next' link".
 
 **Step 5 - Save**
 
-1. Give the recipe a clear **Recipe name**, e.g. "Shops - Pune - Electronics".
+1. Give the recipe a clear name at the top of the right-hand panel, e.g. "Shops - Pune - Electronics".
 2. Click **Save recipe**. Gleaner reads the first page once, the way a run will, to make sure it works.
 3. Go to the **Library** and press **Run**.
 
-The steps panel in the builder ticks off each step as you go.
+The **Preview** at the bottom can be folded away with its arrow when you need more room. Rarely used
+settings (**List type**, **Phone country**) are under **Options**, near **Save recipe**.
 
 ## Lists written as headings and paragraphs
 
@@ -116,16 +118,16 @@ Some websites, often blog-style articles such as "Top medical equipment supplier
 have a list or table. Each entry is a **heading** (the company name) followed by a few **paragraphs**
 (the address, then lines like "Email: ..." and "Phone: ...").
 
-**Auto-detect** recognises this and sets **List type** to **Headings with text below**. It proposes
+**Auto-detect** recognises this and sets **List type** (under **Options**) to **Headings with text below**. It proposes
 **Name** (the heading), **Address** (the first plain paragraph), one column per label that most
 entries have (**Email**, **Phone**, ...) and **Website** if entries show a web address. Check the preview.
 
 To pick by hand:
 
-1. Set **List type** to **Headings with text below**.
-2. Click **+ Add list field** and click one entry's **heading**. Every heading of the list lights up.
-3. Click **+ Add list field** again and click the address paragraph under a heading.
-4. Click **+ Add list field** and click the paragraph with "Email: ... Phone: ...". Gleaner adds one
+1. Open **Options** and set **List type** to **Headings with text below**.
+2. Click **+ Add field** and click one entry's **heading**. Every heading of the list lights up.
+3. Click **+ Add field** again and click the address paragraph under a heading.
+4. Click **+ Add field** and click the paragraph with "Email: ... Phone: ...". Gleaner adds one
    column per label it finds there. Remove the ones you don't need.
 
 When a label's value continues on the next line (two emails or two phone numbers, the first ending in a
@@ -135,7 +137,7 @@ comma), both are kept in the same cell.
 
 Phone numbers are written in Excel with their country code, for example +919845000000. Numbers that
 already start with + (or 00) keep their own country code. For numbers written without one, Gleaner uses
-the recipe's **Phone country** (in the builder, next to **List type**): India +91 unless you choose
+the recipe's **Phone country** (in the builder, under **Options**): India +91 unless you choose
 another, for example Nigeria +234 for a Nigerian directory. A leading 0 is dropped (0803 ... becomes
 +234803...). Choose **Other...** to type any country code.
 
@@ -151,7 +153,7 @@ starts at several lists.
 
 1. In the builder, click through the site's layers yourself (choose the state, then the city, then the
    category) until you see the list. Build the recipe there (Steps 2-5 above).
-2. Under **Start pages**, click **+ Add this page**.
+2. On the **More pages** step, under start pages, click **+ Add this page**.
 3. In the built-in browser, go to the next city's (or category's) list and click **+ Add this page**
    again. Repeat for every list you want.
 4. Or click **Paste addresses...** and paste many list addresses at once, one per line. Handy when the
@@ -160,7 +162,7 @@ starts at several lists.
 
 The Excel file has a **Start Page** column, so you can see which city or category each row came from.
 
-If you prefer separate files per city, you can still **Duplicate** a recipe in the Library and change its
+If you prefer separate files per city, you can still **Duplicate** a recipe (Library, **More**) and change its
 start page.
 
 Many sites also have one long list of everything (for example "All shops") with a filter on the side.
@@ -213,7 +215,7 @@ Mark a field as **Required** in the builder if a row is useless without it (ofte
 
 ## Sharing recipes with colleagues
 
-Select a recipe in the **Library** and click **Share recipe...** to save it as a small file. Send the file
+Select a recipe in the **Library** and click **More > Share recipe...** to save it as a small file. Send the file
 (email, chat, shared folder). Your colleague clicks **Import recipe...** in their Library. Only the recipe is
 shared, never the collected data.
 
@@ -264,7 +266,7 @@ files are kept.
 
 ## Questions and fixes
 
-**The wrong things light up when I pick a field.** Select the field, **Pick again**, click the same value
+**The wrong things light up when I pick a field.** Select the column, **Pick again**, click the same value
 on another item. If it is still wrong, remove the field and click a more specific spot (the text itself,
 not the space around it).
 

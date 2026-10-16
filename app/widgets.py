@@ -4,9 +4,9 @@ import os
 import subprocess
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt
+from PySide6.QtCore import QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QFont, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QPushButton, QToolButton, QVBoxLayout
 
 from app import style
 
@@ -32,7 +32,8 @@ def label(text="", role=None, wrap=False):
 # Windows' own icon fonts (Windows 11 / Windows 10). Code points from Segoe MDL2 Assets, also in Fluent Icons.
 ICON_FONTS = ["Segoe Fluent Icons", "Segoe MDL2 Assets"]
 GLYPHS = {"menu": "", "library": "", "builder": "", "run": "", "guide": "",
-          "settings": "", "auto": "", "light": "", "dark": ""}
+          "settings": "", "auto": "", "light": "", "dark": "", "back": "",
+          "forward": "", "reload": "", "link": ""}
 
 
 def glyph_icon(name, color_key="TEXT", size=20) -> QIcon:
@@ -49,6 +50,18 @@ def glyph_icon(name, color_key="TEXT", size=20) -> QIcon:
     painter.drawText(QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, GLYPHS[name])
     painter.end()
     return QIcon(pixmap)
+
+
+def icon_button(glyph, tooltip):
+    """A small borderless button showing one icon, e.g. the builder's back and forward buttons."""
+    b = QToolButton()
+    b.setObjectName("iconButton")
+    b.setProperty("glyph", glyph)
+    b.setIcon(glyph_icon(glyph, "MUTED"))
+    b.setIconSize(QSize(18, 18))
+    b.setToolTip(tooltip)
+    b.setAccessibleName(tooltip.split(" (")[0])
+    return b
 
 
 def restyle(widget):

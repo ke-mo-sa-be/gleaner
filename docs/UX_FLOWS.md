@@ -171,6 +171,20 @@ Empty State: "No items found on the start page. The site may have changed. Edit 
    earlier Excel files must be cleaned by hand.
 5. Later runs: log line "Skipped a record on the do-not-collect list." (no personal data).
 
+## Flow 19 - Recipe builder layout (v0.8)
+
+1. Top: browser bar with Back / Forward / Reload, the address and **Open**. The address shows the page in the
+   browser.
+2. Left: the website. Right: a panel with the recipe name, one instruction line, and three step tabs
+   (**List**, **Item page**, **More pages**) that tick when done.
+3. List step: Auto-detect, + Add field, Mark item link. Item page step: Open an item; once on an item page,
+   Auto-detect, + Add field, Back to list. The builder switches to the Item page step on an item page and
+   back to List on the list.
+4. More pages step: Mark next page and start pages.
+5. Columns of the current step below (name, type, required; "found" as a tooltip), with Pick again / Remove.
+6. Options (closed): list type, phone country. Bottom: How does this work? and Save recipe.
+7. Bottom: Preview, foldable.
+
 ## Flow 17 - Sidebar and theme button
 
 1. Sidebar top: menu button (Ctrl+B) collapses the sidebar to icons (52 px); each icon shows its section name

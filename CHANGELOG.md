@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Cleaner, more modern look across the app: cards, rounded inputs, quieter secondary buttons, thin
+  scrollbars, Windows 11 font.
+- Recipe builder: browser bar on top (back, forward, reload, address, Open); the right panel shows one
+  step at a time (List, Item page, More pages) with ticks when done, and only that step's columns.
+  List type and phone country moved under Options; the preview can be folded away.
+- Library: New recipe and other library-wide actions on the right of the title; Run, Edit and Export for
+  the selected recipe; Duplicate, Share and Delete under More.
+- The builder's address bar shows the page that is open, including item pages.
+
 ## [0.7.0] - 2026-10-15
 
 ### Added

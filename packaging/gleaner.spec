@@ -8,6 +8,7 @@ a = Analysis(
     pathex=[str(ROOT)],
     datas=[
         (str(ROOT / "app" / "picker.js"), "app"),
+        (str(ROOT / "app" / "icons"), "app/icons"),
         (str(ROOT / "recipes"), "recipes"),
         (str(ROOT / "docs" / "USER_GUIDE.md"), "docs"),
     ],

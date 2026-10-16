@@ -23,7 +23,7 @@ import requests
 log = logging.getLogger(__name__)
 
 MIN_DELAY_FLOOR = 3.0  # seconds; user settings cannot go below this
-UA_TOKEN = "Gleaner/0.7"  # in every request, also the built-in browser's, so site owners can identify the tool
+UA_TOKEN = "Gleaner/0.8"  # in every request, also the built-in browser's, so site owners can identify the tool
 USER_AGENT = f"Mozilla/5.0 (Windows NT 10.0; Win64; x64) {UA_TOKEN}"
 
 # Pause between requests (min, max seconds) for the speed users can pick. "faster" sits on the floor;

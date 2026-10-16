@@ -8,14 +8,14 @@ from urllib.parse import urlsplit
 from PySide6.QtCore import Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QKeySequence, QShortcut
 from PySide6.QtWebEngineWidgets import QWebEngineView
-from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QHBoxLayout, QHeaderView, QInputDialog, QLineEdit,
-                               QListWidget, QMessageBox, QScrollArea, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout,
-                               QWidget)
+from PySide6.QtWidgets import (QAbstractItemView, QComboBox, QFrame, QGridLayout, QHBoxLayout, QHeaderView,
+                               QInputDialog, QLineEdit, QListWidget, QMessageBox, QScrollArea, QSizePolicy, QSplitter,
+                               QStackedWidget, QTabBar, QTableWidget, QTableWidgetItem, QToolButton, QVBoxLayout, QWidget)
 
-from app import render
+from app import render, style
 from app.tasks import run_task, with_store
 from app.web import PickerPage
-from app.widgets import button, label, restyle
+from app.widgets import button, glyph_icon, icon_button, label, restyle
 from core.extract import extract_detail, extract_list
 from core.fetcher import Fetcher
 from core.recipe import Detail, Field, Pagination, Recipe, RecipeError, check_url, validate
@@ -24,6 +24,8 @@ log = logging.getLogger(__name__)
 
 FIELD_TYPES = [("Text", "text"), ("Link", "link"), ("Image", "image"), ("Phone", "phone"), ("Email", "email"),
                ("Pincode", "pincode"), ("Number", "number")]
+STEP_TABS = ("List", "Item page", "More pages")
+LIST, ITEM, PAGES = range(3)
 LIST_TYPES = [("Repeating items", "elements"), ("Headings with text below", "sections")]
 COUNTRIES = [("India +91", "91"), ("Nigeria +234", "234"), ("Kenya +254", "254"), ("Ghana +233", "233"),
              ("South Africa +27", "27"), ("UAE +971", "971"), ("Saudi Arabia +966", "966"), ("UK +44", "44"),
@@ -132,191 +134,269 @@ class BuilderView(QWidget):
 
     def _build_ui(self):
         root = QVBoxLayout(self)
-        root.setContentsMargins(12, 12, 12, 12)
+        root.setContentsMargins(16, 12, 16, 12)
+        root.setSpacing(10)
 
-        top = QHBoxLayout()
-        self.nav_back_btn = button("◀", tooltip="Back (Alt+Left)")
-        self.nav_forward_btn = button("▶", tooltip="Forward (Alt+Right)")
-        self.reload_btn = button("⟳", tooltip="Reload this page")
-        for b, name in ((self.nav_back_btn, "Back"), (self.nav_forward_btn, "Forward"), (self.reload_btn, "Reload")):
-            b.setFixedWidth(36)
-            b.setAccessibleName(name)
+        # Browser bar, like a web browser's: back, forward, reload, address, Open.
+        bar = QFrame()
+        bar.setObjectName("card")
+        top = QHBoxLayout(bar)
+        top.setContentsMargins(6, 4, 6, 4)
+        top.setSpacing(2)
+        self.nav_back_btn = icon_button("back", "Back (Alt+Left)")
+        self.nav_forward_btn = icon_button("forward", "Forward (Alt+Right)")
+        self.reload_btn = icon_button("reload", "Reload this page")
+        for b in (self.nav_back_btn, self.nav_forward_btn, self.reload_btn):
             top.addWidget(b)
         self.nav_back_btn.clicked.connect(self._nav_back)
         self.nav_forward_btn.clicked.connect(self._nav_forward)
         self.reload_btn.clicked.connect(self._reload)
         QShortcut(QKeySequence("Alt+Left"), self, activated=self._nav_back)
         QShortcut(QKeySequence("Alt+Right"), self, activated=self._nav_forward)
-        top.addSpacing(8)
-        top.addWidget(label("Recipe name"))
-        self.name_edit = QLineEdit()
-        self.name_edit.setPlaceholderText("e.g. Shops - Pune - Electronics")
-        top.addWidget(self.name_edit, 1)
-        top.addWidget(label("  Website address"))
         self.url_edit = QLineEdit()
-        self.url_edit.setPlaceholderText("e.g. https://www.example.com/doctors")
+        self.url_edit.setObjectName("address")
+        self.url_edit.setPlaceholderText("Website address, e.g. https://www.example.com/doctors")
+        self.url_edit.setAccessibleName("Website address")
         self.url_edit.returnPressed.connect(self.open_url)
-        top.addWidget(self.url_edit, 3)
-        self.open_btn = button("Open")
+        top.addSpacing(6)
+        top.addWidget(self.url_edit, 1)
+        self.open_btn = button("Open", "primary")
         self.open_btn.clicked.connect(self.open_url)
         top.addWidget(self.open_btn)
-        root.addLayout(top)
+        root.addWidget(bar)
 
         self.view = QWebEngineView()
-        panel = QWidget()
+        web_frame = QFrame()
+        web_frame.setObjectName("card")
+        wf = QVBoxLayout(web_frame)
+        wf.setContentsMargins(1, 1, 1, 1)
+        wf.addWidget(self.view)
+
+        # ---- right panel: name, hint, steps as tabs, columns, options, save ----
+        panel = QFrame()
+        panel.setObjectName("card")
         side = QVBoxLayout(panel)
-        side.setContentsMargins(12, 0, 0, 0)
+        side.setContentsMargins(16, 14, 16, 14)
+        side.setSpacing(10)
+        self.name_edit = QLineEdit()
+        self.name_edit.setObjectName("title")
+        self.name_edit.setPlaceholderText("Recipe name, e.g. Shops - Pune")
+        self.name_edit.setAccessibleName("Recipe name")
+        side.addWidget(self.name_edit)
         self.instruction = label(INSTRUCTIONS["idle"], "instruction", wrap=True)
         side.addWidget(self.instruction)
-        self.steps = label("", "steps", wrap=True)
-        self.steps.setTextFormat(Qt.TextFormat.RichText)
-        side.addWidget(self.steps)
-        help_row = QHBoxLayout()
+
+        self.tabs = QTabBar()
+        self.tabs.setObjectName("steps")
+        self.tabs.setExpanding(True)
+        self.tabs.setDrawBase(False)
+        for text in STEP_TABS:
+            self.tabs.addTab(text)
+        self.tabs.currentChanged.connect(self._tab_changed)
+        side.addWidget(self.tabs)
+        self.step_pages = QStackedWidget()
+        side.addWidget(self.step_pages)
+
+        # Step 1: list page
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout()
         self.auto_btn = button("Auto-detect", "primary",
                                tooltip="Let Gleaner find the list, its fields, the item link and the next page")
         self.auto_btn.clicked.connect(self._auto_detect)
-        help_row.addWidget(self.auto_btn)
-        help_row.addStretch(1)
-        self.help_btn = button("How does this work?", tooltip="Step-by-step guide to making a recipe")
-        self.help_btn.clicked.connect(lambda: self.help_requested.emit("builder"))
-        help_row.addWidget(self.help_btn)
-        side.addLayout(help_row)
+        self.add_list_btn = button("+ Add field", tooltip="Click a value on the page, e.g. a name")
+        self.add_list_btn.setAccessibleName("Add list field")
+        self.link_btn = button("Mark item link", tooltip="The link that opens one item's own page")
+        for b in (self.auto_btn, self.add_list_btn, self.link_btn):
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.step_pages.addWidget(page)
 
-        types = QHBoxLayout()
-        caption = label("List type")
-        caption.setMinimumWidth(100)
-        types.addWidget(caption)
+        # Step 2: item page
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+        self.item_hint = label("Optional. If the list doesn't show everything, mark the item link on the List step, "
+                               "then add values from one item's own page here.", "hint", wrap=True)
+        lay.addWidget(self.item_hint)
+        row = QHBoxLayout()
+        self.open_detail_btn = button("Open an item")
+        self.add_detail_btn = button("+ Add field", tooltip="Click a value on this item's page, e.g. the phone")
+        self.add_detail_btn.setAccessibleName("Add item field")
+        self.auto_detail_btn = button("Auto-detect", "primary", tooltip="Find every label and value on this page")
+        self.auto_detail_btn.clicked.connect(self._auto_detect)
+        self.back_btn = button("Back to list")
+        for b in (self.open_detail_btn, self.auto_detail_btn, self.add_detail_btn, self.back_btn):
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.step_pages.addWidget(page)
+
+        # Step 3: more pages and start pages
+        page = QWidget()
+        lay = QVBoxLayout(page)
+        lay.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout()
+        self.next_btn = button("Mark next page", tooltip="Click the site's Next button or the link to page 2")
+        row.addWidget(self.next_btn)
+        self.next_label = label("", "hint", wrap=True)
+        row.addWidget(self.next_label, 1)
+        lay.addLayout(row)
+        lay.addWidget(label("Start pages: Gleaner starts at each of these lists, for example one per city. Empty "
+                            "means the page you are on.", "hint", wrap=True))
+        self.starts_list = QListWidget()
+        self.starts_list.setObjectName("plain")
+        self.starts_list.setMaximumHeight(96)
+        self.starts_list.setAccessibleName("Start pages")
+        lay.addWidget(self.starts_list)
+        row = QHBoxLayout()
+        self.add_start_btn = button("+ Add this page")
+        self.paste_starts_btn = button("Paste addresses...")
+        self.remove_start_btn = button("Remove", "quiet")
+        for b in (self.add_start_btn, self.paste_starts_btn, self.remove_start_btn):
+            row.addWidget(b)
+        row.addStretch(1)
+        lay.addLayout(row)
+        self.add_start_btn.clicked.connect(self._add_start_page)
+        self.paste_starts_btn.clicked.connect(self._paste_start_pages)
+        self.remove_start_btn.clicked.connect(self._remove_start_page)
+        self.step_pages.addWidget(page)
+        self.step_pages.currentChanged.connect(lambda _i: self._fit_step_pages())
+
+        # Columns of the current step
+        head = QHBoxLayout()
+        self.columns_label = label("Columns", "h2")
+        head.addWidget(self.columns_label)
+        head.addStretch(1)
+        self.again_btn = button("Pick again", "quiet", tooltip="Click another example to fix what this column finds")
+        self.remove_btn = button("Remove", "quiet")
+        self.remove_btn.setAccessibleName("Remove field")
+        head.addWidget(self.again_btn)
+        head.addWidget(self.remove_btn)
+        self.columns_head = QWidget()
+        self.columns_head.setLayout(head)
+        head.setContentsMargins(0, 4, 0, 0)
+        side.addWidget(self.columns_head)
+        self._rows = []  # table row -> index in self.fields (the table shows the current step's columns)
+        self.fields_table = QTableWidget(0, 3)
+        self.fields_table.setObjectName("plain")
+        self.fields_table.setHorizontalHeaderLabels(["Column", "Type", "Required"])
+        self.fields_table.verticalHeader().hide()
+        self.fields_table.verticalHeader().setDefaultSectionSize(36)
+        self.fields_table.setShowGrid(False)
+        self.fields_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.fields_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        header = self.fields_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        header.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        header.setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.fields_table.setColumnWidth(1, 104)
+        self.fields_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.fields_table.itemChanged.connect(self._on_field_edited)
+        self.fields_table.itemSelectionChanged.connect(self._show_selected)
+        side.addWidget(self.fields_table, 10)
+        self.empty_columns = label("", "hint", wrap=True)
+        side.addWidget(self.empty_columns)
+        side.addStretch(1)  # keeps the options and Save at the bottom when there is no table
+
+        # Options, closed by default: list type and phone country
+        self.options_btn = QToolButton()
+        self.options_btn.setObjectName("disclosure")
+        self.options_btn.setCheckable(True)
+        self.options_btn.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextBesideIcon)
+        self.options_btn.setArrowType(Qt.ArrowType.RightArrow)
+        self.options_btn.setText("Options")
+        self.options_btn.toggled.connect(self._toggle_options)
+        side.addWidget(self.options_btn)
+        self.options = QWidget()
+        grid = QGridLayout(self.options)
+        grid.setContentsMargins(0, 0, 0, 0)
+        grid.addWidget(label("List type"), 0, 0)
         self.list_type = QComboBox()
         for text, value in LIST_TYPES:
             self.list_type.addItem(text, value)
         self.list_type.setToolTip("Headings with text below: each heading (for example a company name) starts an "
                                   "item, and the paragraphs under it belong to it")
         self.list_type.activated.connect(self._list_type_chosen)
-        types.addWidget(self.list_type, 1)
-        side.addLayout(types)
-        types = QHBoxLayout()
-        caption = label("Phone country")
-        caption.setMinimumWidth(100)
-        types.addWidget(caption)
+        grid.addWidget(self.list_type, 0, 1)
+        grid.addWidget(label("Phone country"), 1, 0)
         self.country = QComboBox()
         for text, value in COUNTRIES:
             self.country.addItem(text, value)
         self.country.addItem("Other...", "other")
         self.country.setToolTip("Used for phone numbers written without a country code")
         self.country.activated.connect(self._country_chosen)
-        types.addWidget(self.country, 1)
-        side.addLayout(types)
+        grid.addWidget(self.country, 1, 1)
+        grid.setColumnStretch(1, 1)
+        self.options.hide()
+        side.addWidget(self.options)
 
-        side.addWidget(label("List page", "h2"))
-        row = QHBoxLayout()
-        self.add_list_btn = button("+ Add list field")
-        self.link_btn = button("Mark item link", tooltip="The link that opens one item's own page")
-        self.next_btn = button("Mark next page")
-        for b in (self.add_list_btn, self.link_btn, self.next_btn):
-            row.addWidget(b)
-        side.addLayout(row)
-        self.next_label = label("", "hint", wrap=True)
-        side.addWidget(self.next_label)
-
-        side.addWidget(label("Item page", "h2"))
-        row = QHBoxLayout()
-        self.open_detail_btn = button("Open an item")
-        self.add_detail_btn = button("+ Add item field")
-        self.back_btn = button("Back to list")
-        for b in (self.open_detail_btn, self.add_detail_btn, self.back_btn):
-            row.addWidget(b)
-        side.addLayout(row)
-
-        side.addWidget(label("Fields", "h2"))
-        self.fields_table = QTableWidget(0, 5)
-        self.fields_table.setMinimumHeight(150)
-        self.fields_table.setHorizontalHeaderLabels(["Page", "Column name", "Type", "Required", "Found"])
-        self.fields_table.verticalHeader().hide()
-        self.fields_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        self.fields_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
-        header = self.fields_table.horizontalHeader()
-        header.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        header.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
-        header.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
-        header.setSectionResizeMode(4, QHeaderView.ResizeMode.ResizeToContents)
-        self.fields_table.setColumnWidth(2, 92)
-        self.fields_table.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        self.fields_table.itemChanged.connect(self._on_field_edited)
-        self.fields_table.itemSelectionChanged.connect(self._show_selected)
-        side.addWidget(self.fields_table, 1)
-        row = QHBoxLayout()
-        self.again_btn = button("Pick again", tooltip="Click another example to fix what this field finds")
-        self.remove_btn = button("Remove field")
-        row.addWidget(self.again_btn)
-        row.addWidget(self.remove_btn)
-        row.addStretch(1)
-        side.addLayout(row)
-        side.addWidget(label("Start pages", "h2"))
-        side.addWidget(label("Gleaner starts at each of these list pages, for example one per city. Empty means the "
-                             "page you are on.", "hint", wrap=True))
-        self.starts_list = QListWidget()
-        self.starts_list.setMaximumHeight(78)
-        self.starts_list.setAccessibleName("Start pages")
-        side.addWidget(self.starts_list)
-        row = QHBoxLayout()
-        self.add_start_btn = button("+ Add this page")
-        self.paste_starts_btn = button("Paste addresses...")
-        self.remove_start_btn = button("Remove")
-        for b in (self.add_start_btn, self.paste_starts_btn, self.remove_start_btn):
-            row.addWidget(b)
-        row.addStretch(1)
-        side.addLayout(row)
-        self.add_start_btn.clicked.connect(self._add_start_page)
-        self.paste_starts_btn.clicked.connect(self._paste_start_pages)
-        self.remove_start_btn.clicked.connect(self._remove_start_page)
+        foot = QHBoxLayout()
+        self.help_btn = button("How does this work?", "link", tooltip="Step-by-step guide to making a recipe")
+        self.help_btn.clicked.connect(lambda: self.help_requested.emit("builder"))
+        foot.addWidget(self.help_btn)
+        foot.addStretch(1)
         self.save_btn = button("Save recipe", "primary")
+        foot.addWidget(self.save_btn)
+        side.addLayout(foot)
 
-        horizontal = QSplitter(Qt.Orientation.Horizontal)
-        horizontal.addWidget(self.view)
-        # The panel scrolls rather than squashing the steps and fields on small screens.
-        panel_scroll = QScrollArea()
+        panel_scroll = QScrollArea()  # scrolls rather than squashing on small screens
         panel_scroll.setWidgetResizable(True)
         panel_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
         panel_scroll.setWidget(panel)
-        panel.setObjectName("view")
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-        right_layout.addWidget(panel_scroll, 1)
-        save_row = QHBoxLayout()
-        save_row.setContentsMargins(12, 6, 0, 0)
-        save_row.addWidget(self.save_btn)
-        right_layout.addLayout(save_row)
-        horizontal.addWidget(right)
+        panel_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        panel_scroll.setMinimumWidth(440)
+
+        horizontal = QSplitter(Qt.Orientation.Horizontal)
+        horizontal.setHandleWidth(10)
+        horizontal.addWidget(web_frame)
+        horizontal.addWidget(panel_scroll)
         horizontal.setStretchFactor(0, 65)
         horizontal.setStretchFactor(1, 35)
-        horizontal.setSizes([720, 480])
-        panel.setMinimumWidth(440)
+        horizontal.setSizes([740, 470])
 
-        preview = QWidget()
+        # ---- preview, collapsible ----
+        preview = QFrame()
+        preview.setObjectName("card")
         pv = QVBoxLayout(preview)
-        pv.setContentsMargins(0, 8, 0, 0)
+        pv.setContentsMargins(12, 6, 12, 8)
         prow = QHBoxLayout()
+        self.preview_btn = QToolButton()
+        self.preview_btn.setObjectName("disclosure")
+        self.preview_btn.setCheckable(True)
+        self.preview_btn.setChecked(True)
+        self.preview_btn.setArrowType(Qt.ArrowType.DownArrow)
+        self.preview_btn.setToolTip("Show or hide the preview")
+        self.preview_btn.setAccessibleName("Hide preview")
+        self.preview_btn.toggled.connect(self._toggle_preview)
+        prow.addWidget(self.preview_btn)
         self.preview_label = label("Preview", "h2")
         prow.addWidget(self.preview_label)
         prow.addStretch(1)
-        self.preview_details_btn = button("Preview item pages",
+        self.preview_details_btn = button("Preview item pages", "quiet",
                                           tooltip="Fetches 3 item pages politely (about 30 seconds)")
         prow.addWidget(self.preview_details_btn)
         pv.addLayout(prow)
         self.preview_table = QTableWidget(0, 0)
+        self.preview_table.setObjectName("plain")
         self.preview_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.preview_table.verticalHeader().hide()
+        self.preview_table.setShowGrid(False)
+        self.preview_table.setAlternatingRowColors(True)
+        self.preview_table.horizontalHeader().setStretchLastSection(True)
         pv.addWidget(self.preview_table)
 
-        vertical = QSplitter(Qt.Orientation.Vertical)
-        vertical.addWidget(horizontal)
-        vertical.addWidget(preview)
-        vertical.setStretchFactor(0, 3)
-        vertical.setStretchFactor(1, 1)
-        vertical.setSizes([600, 200])
-        root.addWidget(vertical, 1)
+        self.vertical = QSplitter(Qt.Orientation.Vertical)
+        self.vertical.setHandleWidth(10)
+        self.vertical.addWidget(horizontal)
+        self.vertical.addWidget(preview)
+        self.vertical.setStretchFactor(0, 3)
+        self.vertical.setStretchFactor(1, 1)
+        self.vertical.setSizes([600, 220])
+        root.addWidget(self.vertical, 1)
 
         self.add_list_btn.clicked.connect(self._add_list_field)
         self.link_btn.clicked.connect(self._mark_link)
@@ -328,6 +408,39 @@ class BuilderView(QWidget):
         self.remove_btn.clicked.connect(self._remove_field)
         self.save_btn.clicked.connect(self._save)
         self.preview_details_btn.clicked.connect(self._preview_details)
+        style.theme_changed.changed.connect(self._restyle_icons)
+        self._fit_step_pages()
+
+    def _restyle_icons(self):
+        for b in (self.nav_back_btn, self.nav_forward_btn, self.reload_btn):
+            b.setIcon(glyph_icon(b.property("glyph"), "MUTED"))
+        self._render_fields()
+
+    def _fit_step_pages(self):
+        """The step area takes the height of the visible step only."""
+        current = self.step_pages.currentWidget()
+        for i in range(self.step_pages.count()):
+            policy = QSizePolicy.Policy.Preferred if i == self.step_pages.currentIndex() else QSizePolicy.Policy.Ignored
+            self.step_pages.widget(i).setSizePolicy(QSizePolicy.Policy.Preferred, policy)
+        current.layout().activate()
+        self.step_pages.setFixedHeight(current.layout().heightForWidth(max(self.step_pages.width(), 380))
+                                       if current.layout().hasHeightForWidth() else current.sizeHint().height())
+
+    def _toggle_options(self, shown):
+        self.options.setVisible(shown)
+        self.options_btn.setArrowType(Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow)
+
+    def _toggle_preview(self, shown):
+        self.preview_table.setVisible(shown)
+        self.preview_btn.setArrowType(Qt.ArrowType.DownArrow if shown else Qt.ArrowType.RightArrow)
+        self.preview_btn.setAccessibleName("Hide preview" if shown else "Show preview")
+        total = sum(self.vertical.sizes())
+        self.vertical.setSizes([total - 220, 220] if shown else [total - 44, 44])
+
+    def _tab_changed(self, index):
+        self.step_pages.setCurrentIndex(index)
+        self._render_fields()
+        self._update_buttons()
 
     # ---- state -------------------------------------------------------------------------------
 
@@ -449,7 +562,7 @@ class BuilderView(QWidget):
     def _on_load_started(self):
         self.loaded = False
         self._update_buttons()
-        self.preview_label.setText("Preview - loading page...")
+        self.preview_label.setText("Preview - loading page..." if self._target_url or self.loaded else "Preview")
 
     def _on_loaded(self, ok):
         url = self.page.url().toString()
@@ -470,7 +583,11 @@ class BuilderView(QWidget):
             else:
                 self._instruct(INSTRUCTIONS["idle"])
         else:
-            self._instruct("This is one item's page. Click + Add item field, then click a value.")
+            self._instruct("This is one item's page. Click + Add field, then click a value.")
+        if self.on_detail:
+            self.tabs.setCurrentIndex(ITEM)
+        elif self.tabs.currentIndex() == ITEM:
+            self.tabs.setCurrentIndex(LIST)
         self._update_buttons()
         self._refresh_preview()
         # Sites that build their content with JavaScript fill the page after it has loaded: look again.
@@ -479,7 +596,7 @@ class BuilderView(QWidget):
                           and self._refresh_preview())
 
     def _on_url_changed(self, qurl):
-        if not self.on_detail and qurl.toString() != "about:blank":
+        if qurl.toString() != "about:blank":  # the address bar shows the page in the browser, like any browser
             self.url_edit.setText(qurl.toString())
 
     def _navigate(self, url, detail):
@@ -630,8 +747,8 @@ class BuilderView(QWidget):
         self._start("detail")
 
     def _pick_again(self):
-        row = self.fields_table.currentRow()
-        if row < 0 or row >= len(self.fields):
+        row = self._selected_field()
+        if row is None:
             return
         b = self.fields[row]
         if b.page == "detail":
@@ -753,29 +870,47 @@ class BuilderView(QWidget):
     # ---- fields table ------------------------------------------------------------------------
 
     def _render_fields(self):
+        """The columns of the current step: list columns on List, item page columns on Item page."""
+        step = self.tabs.currentIndex()
+        page = "detail" if step == ITEM else "list"
+        self._rows = [i for i, b in enumerate(self.fields) if b.page == page] if step != PAGES else []
         t = self.fields_table
         t.blockSignals(True)
-        t.setRowCount(len(self.fields))
-        for r, b in enumerate(self.fields):
-            page = "Item link" if b.is_link else ("List" if b.page == "list" else "Item page")
-            fixed = QTableWidgetItem(page)
-            fixed.setFlags(fixed.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            t.setItem(r, 0, fixed)
-            t.setItem(r, 1, QTableWidgetItem(b.field.name))
+        t.setRowCount(len(self._rows))
+        for r, index in enumerate(self._rows):
+            b = self.fields[index]
+            name = QTableWidgetItem(b.field.name)
+            name.setToolTip(("Item link. " if b.is_link else "") + (f"Found: {b.found}" if b.found else ""))
+            if b.is_link:
+                name.setIcon(glyph_icon("link", "MUTED", 16))
+            t.setItem(r, 0, name)
             combo = QComboBox()
+            combo.setObjectName("cell")
             for text, value in FIELD_TYPES:
                 combo.addItem(text, value)
             combo.setCurrentIndex(next(i for i, (_t, v) in enumerate(FIELD_TYPES) if v == b.field.type))
-            combo.currentIndexChanged.connect(lambda _i, row=r, c=combo: self._set_type(row, c.currentData()))
-            t.setCellWidget(r, 2, combo)
+            combo.currentIndexChanged.connect(lambda _i, row=index, c=combo: self._set_type(row, c.currentData()))
+            t.setCellWidget(r, 1, combo)
             req = QTableWidgetItem()
             req.setFlags(Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
             req.setCheckState(Qt.CheckState.Checked if b.field.required else Qt.CheckState.Unchecked)
-            t.setItem(r, 3, req)
-            found = QTableWidgetItem(b.found)
-            found.setFlags(found.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            t.setItem(r, 4, found)
+            req.setToolTip("Rows without this value go to Needs Review")
+            t.setItem(r, 2, req)
         t.blockSignals(False)
+        empty = {LIST: "No columns yet. Click Auto-detect, or + Add field and click a value on the page.",
+                 ITEM: "No item page columns yet."}
+        shown = step != PAGES
+        t.setVisible(shown and bool(self._rows))
+        self.columns_head.setVisible(shown)
+        self.empty_columns.setVisible(shown and not self._rows)
+        self.empty_columns.setText(empty.get(step, ""))
+
+    def _selected_field(self):
+        """Index in self.fields of the selected table row, or None."""
+        row = self.fields_table.currentRow()
+        if not self.fields_table.selectedItems() or not 0 <= row < len(self._rows):
+            return None
+        return self._rows[row]
 
     def _set_type(self, row, value):
         self.fields[row].field.type = value
@@ -783,11 +918,11 @@ class BuilderView(QWidget):
         self._refresh_preview()
 
     def _on_field_edited(self, item):
-        row = item.row()
-        if row >= len(self.fields):
+        if item.row() >= len(self._rows):
             return
+        row = self._rows[item.row()]
         f = self.fields[row].field
-        if item.column() == 1:
+        if item.column() == 0:
             new = item.text().strip()
             others = {b.field.name for i, b in enumerate(self.fields) if i != row}
             if not new or new in others:
@@ -797,14 +932,15 @@ class BuilderView(QWidget):
                 self.fields_table.blockSignals(False)
                 return
             f.name = new
-        elif item.column() == 3:
+        elif item.column() == 2:
             f.required = item.checkState() == Qt.CheckState.Checked
         self.dirty = True
         self._refresh_preview()
 
     def _show_selected(self):
-        row = self.fields_table.currentRow()
-        if not self.loaded or row < 0 or row >= len(self.fields):
+        row = self._selected_field()
+        self._update_buttons()
+        if not self.loaded or row is None:
             return
         b = self.fields[row]
         if b.page == "list" and not self.on_detail and self.item_selector and self.item_mode == "sections":
@@ -817,8 +953,8 @@ class BuilderView(QWidget):
             self.page.clear_highlights()
 
     def _remove_field(self):
-        row = self.fields_table.currentRow()
-        if row < 0 or row >= len(self.fields):
+        row = self._selected_field()
+        if row is None:
             return
         b = self.fields[row]
         if b.is_link and any(x.page == "detail" for x in self.fields):
@@ -982,18 +1118,13 @@ class BuilderView(QWidget):
         restyle(self.instruction)
 
     def _render_steps(self):
+        """A tick on each step that is done."""
         has_list = any(b.page == "list" and not b.is_link for b in self.fields)
-        has_link = any(b.is_link for b in self.fields)
         has_detail = any(b.page == "detail" for b in self.fields)
-        steps = [
-            (bool(self.list_url), "Open the page that lists the items"),
-            (has_list, "Add at least one list field"),
-            (self.pagination.type != "none", "Optional: mark next page"),
-            (has_link and has_detail, "Optional: mark item link, then add item fields"),
-            (self.recipe_id is not None and not self.dirty, "Name the recipe and save"),
-        ]
-        lines = [f"{'&#10003;' if done else '&#9675;'}&nbsp; {i}. {text}" for i, (done, text) in enumerate(steps, 1)]
-        self.steps.setText("<b>Steps</b><br>" + "<br>".join(lines))
+        done = (has_list, has_detail, self.pagination.type != "none" or bool(self.start_urls))
+        for i, (text, ok) in enumerate(zip(STEP_TABS, done)):
+            self.tabs.setTabText(i, f"\u2713 {text}" if ok else text)
+            self.tabs.setTabToolTip(i, "Done" if ok else ("Optional" if i else "Start here"))
 
     # ---- auto-detect -------------------------------------------------------------------------
 
@@ -1130,16 +1261,31 @@ class BuilderView(QWidget):
         self.reload_btn.setEnabled(self.page.url().toString() not in ("", "about:blank")
                                    if hasattr(self, "page") else False)
         on_list = self.loaded and not self.on_detail
-        self.auto_btn.setEnabled(self.loaded)
+        has_link = any(b.is_link for b in self.fields)
+        self.auto_btn.setEnabled(on_list)
         self.add_start_btn.setEnabled(on_list)
         self.remove_start_btn.setEnabled(bool(self.start_urls))
-        has_link = any(b.is_link for b in self.fields)
         self.add_list_btn.setEnabled(on_list)
         self.link_btn.setEnabled(on_list)
         self.next_btn.setEnabled(on_list)
+        # Item page step: show only the buttons that make sense right now.
+        self.open_detail_btn.setVisible(not self.on_detail)
         self.open_detail_btn.setEnabled(on_list and has_link)
+        for b in (self.auto_detail_btn, self.add_detail_btn, self.back_btn):
+            b.setVisible(self.on_detail)
+        self.auto_detail_btn.setEnabled(self.loaded and self.on_detail)
         self.add_detail_btn.setEnabled(self.loaded and self.on_detail)
         self.back_btn.setEnabled(self.on_detail)
-        self.preview_details_btn.setEnabled(on_list and has_link and any(b.page == "detail" for b in self.fields))
-        self.again_btn.setEnabled(self.loaded and bool(self.fields))
-        self.remove_btn.setEnabled(bool(self.fields))
+        if self.on_detail:
+            self.item_hint.setText("Click + Add field, then a value on this page, or let Auto-detect find them.")
+        elif has_link:
+            self.item_hint.setText("Open one item to add values from its own page (phone, address, ...).")
+        else:
+            self.item_hint.setText("Optional. If the list doesn't show everything, click Mark item link on the "
+                                   "List step first.")
+        self.preview_details_btn.setVisible(any(b.page == "detail" for b in self.fields))
+        self.preview_details_btn.setEnabled(on_list and has_link)
+        selected = self._selected_field() is not None
+        self.again_btn.setEnabled(self.loaded and selected)
+        self.remove_btn.setEnabled(selected)
+        self._fit_step_pages()

@@ -97,6 +97,9 @@ class BuilderFlowTest(unittest.TestCase):
         self.click("li.item a.more")
         wait_until(lambda: b.on_detail and b.loaded)
         self.assertTrue(b.fields[1].is_link)
+        self.assertEqual(b.tabs.currentIndex(), builder_view.ITEM)  # follows the page to the item step
+        self.assertFalse(b.open_detail_btn.isVisibleTo(b))
+        self.assertTrue(b.add_detail_btn.isVisibleTo(b))
 
         b._add_detail_field()
         self.click("table.info tr:nth-of-type(2) td:nth-of-type(2)")
@@ -105,8 +108,12 @@ class BuilderFlowTest(unittest.TestCase):
         self.assertEqual((phone.name, phone.label, phone.label_scope, phone.type),
                          ("Phone Number", "Phone Number", "table.info tr", "phone"))
 
+        self.assertEqual(b.fields_table.rowCount(), 1)  # only the item page's columns on that step
         b._back_to_list()
         wait_until(lambda: b.loaded and not b.on_detail)
+        self.assertEqual(b.tabs.currentIndex(), builder_view.LIST)
+        self.assertEqual(b.fields_table.rowCount(), 2)
+        self.assertTrue(b.tabs.tabText(builder_view.LIST).startswith("✓"))
         b._mark_next()
         self.click("a.next")
         wait_until(lambda: b.pagination.type != "none")
