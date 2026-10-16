@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-16
+
 ### Changed
 
 - Cleaner, more modern look across the app: cards, rounded inputs, quieter secondary buttons, thin
@@ -17,6 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Library: New recipe and other library-wide actions on the right of the title; Run, Edit and Export for
   the selected recipe; Duplicate, Share and Delete under More.
 - The builder's address bar shows the page that is open, including item pages.
+- User-Agent is now `Gleaner/0.8`.
+
+### Known issues
+
+- Releases are not code-signed (internal use), so Windows Smart App Control blocks the installer unless IT
+  allows it.
 
 ## [0.7.0] - 2026-10-15
 
@@ -98,7 +106,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   cleanup of phone, email and pincode columns, Excel export with Records, Needs Review and Run Log sheets.
 - Windows installer (per user, no admin rights).
 
-[Unreleased]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/ke-mo-sa-be/gleaner/compare/v0.4.0...v0.5.0

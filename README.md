@@ -18,6 +18,7 @@ products, members, professionals, ...) into clean Excel files, politely and safe
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
+- v0.8: Cleaner, modern UI; step-based Recipe builder (List, Item page, More pages); simpler Library.
 - v0.7: Sites that build their list with JavaScript (runs open pages in Gleaner's browser), collapsible
   sidebar, theme button on every screen.
 - v0.6: Directories written as headings and paragraphs, image columns, phone country per recipe, Back /
