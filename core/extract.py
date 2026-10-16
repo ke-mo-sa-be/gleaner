@@ -96,20 +96,42 @@ def block_lines(tag) -> list[str]:
     return [line for line in (" ".join(x.split()) for x in "".join(parts).split("\n")) if line]
 
 
+URL_TEXT = re.compile(r"(https?://[^\s,;]+|www\.[^\s,;]+)", re.I)
+PHONE_LINE = re.compile(r"^[+(\d][\d\s().+/-]{6,}$")
+EMAIL_LINE = re.compile(r"^[\w.+-]+\s*(@|\[at\]|\(at\))\s*[\w-]+(\.|\[dot\]|\(dot\))", re.I)
+
+
+def _same_kind(value: str, line: str) -> bool:
+    """A line without a label that carries on the value above it: another phone number under a phone number,
+    another email under an email."""
+    if PHONE_LINE.match(line) and sum(c.isdigit() for c in line) >= 7:
+        return sum(c.isdigit() for c in value) >= 7
+    if EMAIL_LINE.match(line):
+        return bool(EMAIL_LINE.search(value.split(",")[-1].strip()))
+    return False
+
+
 def label_line_value(lines: list[str], label: str):
-    """Value written after "Label:" in a block of lines. A value ending in a comma continues on the next line
-    ("Email: a@x.com," / "b@x.com"); a label alone on its line takes the next line."""
-    wanted = _norm_label(label)
+    """Value written after "Label:" in a block of lines. label may list several words for the same thing,
+    "Phone|Tel". A value ending in a comma continues on the next line ("Email: a@x.com," / "b@x.com"), as does
+    an unlabeled line of the same kind (a second phone number); a label alone on its line takes the next line."""
+    wanted = {_norm_label(alt) for alt in label.split("|") if alt.strip()}
     for i, line in enumerate(lines):
         m = LABEL_LINE.match(line)
-        if not m or _norm_label(m.group(1)) != wanted:
+        if not m or _norm_label(m.group(1)) not in wanted:
             continue
         value = m.group(2).strip()
         j = i + 1
         if not value and j < len(lines) and not LABEL_LINE.match(lines[j]):
             value, j = lines[j], j + 1
-        while value.endswith(",") and j < len(lines) and not LABEL_LINE.match(lines[j]):
-            value, j = f"{value} {lines[j]}", j + 1
+        while j < len(lines) and not LABEL_LINE.match(lines[j]):
+            if value.endswith(","):
+                value = f"{value} {lines[j]}"
+            elif _same_kind(value, lines[j]):
+                value = f"{value}, {lines[j]}"
+            else:
+                break
+            j += 1
         return value.rstrip(",").strip() or None
     return None
 
@@ -158,7 +180,11 @@ def field_value(scope, field: Field, base_url: str):
         return label_line_value(block_lines(scope), field.label)  # "Label: value" lines in a section
     el = _select_one(scope, field.selector)
     if field.attr == "text" and el is not None and el is scope and scope.name == "div" and scope.parent is None:
-        return " ".join(block_lines(el)) or None  # a whole section: keep line breaks as spaces
+        text = " ".join(block_lines(el)) or None  # a whole section: keep line breaks as spaces
+        if text and field.type in ("link", "image"):
+            found = URL_TEXT.search(text)  # the web address written in the section, not all its text
+            return found.group(1) if found else None
+        return text
     return _value(el, field.attr, base_url)
 
 

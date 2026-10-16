@@ -76,24 +76,40 @@ class PickerPage(QWebEnginePage):
     def stop_pick(self):
         self.call("window.__gleaner && window.__gleaner.stop()")
 
-    def show_list(self, item_selector, selector=None):
+    # The show_* calls outline the matches, scroll the first into view and flash it; callback(count).
+    def show_list(self, item_selector, selector=None, callback=None):
         args = json.dumps(item_selector) + ("" if selector is None else ", " + json.dumps(selector))
-        self.call(f"window.__gleaner && window.__gleaner.show({args})")
+        self.call(f"window.__gleaner ? window.__gleaner.show({args}) : 0", callback)
 
-    def show_one(self, selector):
-        self.call(f"window.__gleaner && window.__gleaner.showOne({json.dumps(selector)})")
+    def show_one(self, selector, callback=None):
+        self.call(f"window.__gleaner ? window.__gleaner.showOne({json.dumps(selector)}) : 0", callback)
+
+    def show_section(self, heading_selector, field, callback=None):
+        """field: {"selector": ...} or {"label": "Phone|Tel"} inside each heading's section."""
+        self.call(f"window.__gleaner ? window.__gleaner.showSection({json.dumps(heading_selector)}, "
+                  f"{json.dumps(field)}) : 0", callback)
+
+    def show_label(self, label, scope, callback=None):
+        self.call(f"window.__gleaner ? window.__gleaner.showLabel({json.dumps(label)}, {json.dumps(scope)}) : 0",
+                  callback)
+
+    def show_item(self, item_selector, index, sections=False, callback=None):
+        self.call(f"window.__gleaner ? window.__gleaner.showItem({json.dumps(item_selector)}, {int(index)}, "
+                  f"{json.dumps(bool(sections))}) : 0", callback)
 
     def clear_highlights(self):
         self.call("window.__gleaner && window.__gleaner.clear()")
 
-    def auto_detect(self, kind, callback):
-        """callback(dict) with auto-detect results for a list page (kind="list") or item page ("detail")."""
+    def auto_detect(self, kind, callback, item_mode=None):
+        """callback(dict) with auto-detect results for a list page (kind="list") or item page ("detail").
+        item_mode="sections" looks only for headings with text below (the user chose that list type)."""
         def parse(text):
             try:
                 callback(json.loads(text) if text else {"type": "error", "message": "The page isn't ready yet."})
             except json.JSONDecodeError:
                 callback({"type": "error", "message": "Auto-detect failed. Pick the fields by hand."})
-        self.call(f"window.__gleaner ? JSON.stringify(window.__gleaner.autoDetect({json.dumps(kind)})) : ''", parse)
+        self.call(f"window.__gleaner ? JSON.stringify(window.__gleaner.autoDetect({json.dumps(kind)}, "
+                  f"{json.dumps(item_mode)})) : ''", parse)
 
     def snapshot(self, callback):
         """callback(html) with the current DOM, minus the picker overlay."""

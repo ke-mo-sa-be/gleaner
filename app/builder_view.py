@@ -387,6 +387,10 @@ class BuilderView(QWidget):
         self.preview_table.setShowGrid(False)
         self.preview_table.setAlternatingRowColors(True)
         self.preview_table.horizontalHeader().setStretchLastSection(True)
+        self.preview_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        self.preview_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
+        self.preview_table.setToolTip("Click a row to find that item on the page")
+        self.preview_table.itemSelectionChanged.connect(self._show_preview_row)
         pv.addWidget(self.preview_table)
 
         self.vertical = QSplitter(Qt.Orientation.Vertical)
@@ -783,13 +787,14 @@ class BuilderView(QWidget):
                 elif p.get("labels") and p.get("itemMode") == "sections":
                     # "Email: ... / Phone: ..." lines in a section: one column per label.
                     added = []
-                    for lab in p["labels"]:
-                        if any(b.field.label == lab for b in self.fields) or not self._sensitive_ok(lab):
+                    for group in p["labels"]:  # {"name": "Phone", "label": "Phone|Tel"}
+                        name, lab = group["name"], group["label"]
+                        if any(b.field.label == lab for b in self.fields) or not self._sensitive_ok(name):
                             continue
-                        self.fields.append(BuilderField("list", Field(self._unique_name(lab), label=lab,
-                                                                      type=type_for_label(lab)),
-                                                        None, f"after '{lab}:'"))
-                        added.append(lab)
+                        self.fields.append(BuilderField("list", Field(self._unique_name(name), label=lab,
+                                                                      type=type_for_label(name)),
+                                                        None, "after " + ", ".join(f"'{x}:'" for x in lab.split("|"))))
+                        added.append(name)
                     found = None
                     self._instruct(f"Added columns for: {', '.join(added) or 'nothing new'}. Remove the ones you "
                                    "don't need.")
@@ -943,14 +948,40 @@ class BuilderView(QWidget):
         if not self.loaded or row is None:
             return
         b = self.fields[row]
+        f = b.field
+
+        def shown(count):  # the page has scrolled to the first match and flashes it
+            self._shown(b, count)
+
         if b.page == "list" and not self.on_detail and self.item_selector and self.item_mode == "sections":
-            self.page.show_list(self.item_selector)  # fields live in virtual sections: light up the headings
-        elif b.page == "list" and not self.on_detail and self.item_selector and b.field.selector is not None:
-            self.page.show_list(self.item_selector, b.field.selector)
-        elif b.page == "detail" and self.on_detail and b.field.selector:
-            self.page.show_one(b.field.selector)
+            self.page.show_section(self.item_selector, {"label": f.label} if f.label else {"selector": f.selector},
+                                   shown)
+        elif b.page == "list" and not self.on_detail and self.item_selector and f.selector is not None:
+            self.page.show_list(self.item_selector, f.selector, shown)
+        elif b.page == "detail" and self.on_detail and f.label and f.label_scope:
+            self.page.show_label(f.label, f.label_scope, shown)
+        elif b.page == "detail" and self.on_detail and f.selector:
+            self.page.show_one(f.selector, shown)
         else:
             self.page.clear_highlights()
+            where = "list page" if b.page == "list" else "item page"
+            self._instruct(f"Open the {where} to see where '{f.name}' is.")
+
+    def _shown(self, b, count):
+        if not isinstance(count, (int, float)):
+            return
+        if count:
+            self._instruct(f"'{b.field.name}' is outlined on the page ({int(count)} found). The flashing one is "
+                           "the first.")
+        else:
+            self._instruct(f"'{b.field.name}' isn't on this page. Pick again to fix it, or Remove it.", error=True)
+
+    def _show_preview_row(self):
+        """Clicking a preview row scrolls the page to that item."""
+        row = self.preview_table.currentRow()
+        if row < 0 or not self.loaded or self.on_detail or not self.item_selector:
+            return
+        self.page.show_item(self.item_selector, row, self.item_mode == "sections")
 
     def _remove_field(self):
         row = self._selected_field()
@@ -1133,7 +1164,9 @@ class BuilderView(QWidget):
             self._instruct("Open a page first, and wait for it to finish loading.", error=True)
             return
         self._instruct("Looking for the list and its fields...")
-        self.page.auto_detect("detail" if self.on_detail else "list", self._auto_detected)
+        # A list type the user chose ("Headings with text below") is respected.
+        self.page.auto_detect("detail" if self.on_detail else "list", self._auto_detected,
+                              self.item_mode if self.item_mode == "sections" else None)
 
     def _auto_detected(self, res):
         kind = res.get("type")

@@ -7,6 +7,13 @@ from core.recipe import Recipe
 PHONE_CHUNK = re.compile(r"\+?\d[\d\s\-()]{6,}\d")
 PINCODE = re.compile(r"(?<!\d)([1-9]\d{2})\s?(\d{3})(?!\d)")
 EMAIL = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
+AT_WORD = re.compile(r"\s*[\[(\{]\s*at\s*[\])\}]\s*", re.I)
+DOT_WORD = re.compile(r"\s*[\[(\{]\s*dot\s*[\])\}]\s*", re.I)
+
+
+def unobfuscate_email(text: str) -> str:
+    """name[at]site[dot]com and name (at) site.com, written that way to hide from spam robots."""
+    return DOT_WORD.sub(".", AT_WORD.sub("@", text))
 NUMBER = re.compile(r"-?\d+(?:[.,]\d+)*")
 
 FIXED_BEFORE = ["Record ID"]
@@ -70,7 +77,7 @@ def clean_value(raw, field_type, country="91"):
             return ", ".join(good), None
         return None, f"invalid phone {', '.join(bad) or raw!r}"
     if field_type == "email":
-        found = [e.lower() for e in EMAIL.findall(raw)]
+        found = [e.lower() for e in EMAIL.findall(unobfuscate_email(raw))]
         return (", ".join(dict.fromkeys(found)), None) if found else (None, f"invalid email {raw!r}")
     if field_type == "pincode":
         # Usually read from free-text addresses; no pincode there is a blank, not an error.

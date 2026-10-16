@@ -77,5 +77,13 @@ class BuildRowsTests(unittest.TestCase):
                           "Issues"])
 
 
+class ObfuscatedEmailTests(unittest.TestCase):
+    def test_at_and_dot_words(self):
+        from core.clean import clean_value
+        self.assertEqual(clean_value("m.ben[at]medizin.example", "email")[0], "m.ben@medizin.example")
+        self.assertEqual(clean_value("info (at) site [dot] example", "email")[0], "info@site.example")
+        self.assertEqual(clean_value("Contact us", "email")[0], None)
+
+
 if __name__ == "__main__":
     unittest.main()

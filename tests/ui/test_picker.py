@@ -65,6 +65,36 @@ SECTIONS = """<html><body><main><article><div class="entry-content">
 <div class="shop"><div class="card"><img src="/p/1.png" alt="one"><b>One</b></div>
 <div class="card"><img src="/p/2.png" alt="two"><b>Two</b></div></div></body></html>"""
 
+# Like pharmchoices' country lists: a sidebar with big widgets, then companies as h3 + paragraphs with
+# Phone/Tel labels, a second number on its own line, an obfuscated email and web addresses.
+SIDEBAR_SECTIONS = """<html><body class="right-sidebar"><div class="site-content"><main><article>
+<div class="entry-content">
+<p>All medical device companies must be registered with the ministry before they sell anything here.</p>
+<h2 class="wp-block-heading">Medical Device Companies</h2>
+<h3 class="wp-block-heading">Agfa Tunisie</h3>
+<p class="wp-block-paragraph">12 Rue de l'energie,<br>Zone Industrielle<br>Tunis 2035, Tunisia</p>
+<p class="wp-block-paragraph">Phone: +216 71 770 000<br>+216 71 770 309<br>http://www.agfa.example/</p>
+<h3 class="wp-block-heading">Atomedical</h3>
+<p class="wp-block-paragraph">Bloc B, Belvedere Center<br>Tunis 1002, Tunisia</p><div class="ad"></div>
+<p class="wp-block-paragraph">Phone: +216 97 287 771<br>http://www.atomedical.example/</p>
+<h3 class="wp-block-heading">Biomedica</h3>
+<p class="wp-block-paragraph">Ariana<br>2037 Tunis</p>
+<p class="wp-block-paragraph">Tel: (+216) 54 471 830<br>Email: biomedica@planet.example<br>https://www.biomedica.example</p>
+<h3 class="wp-block-heading">Evocare</h3>
+<p class="wp-block-paragraph">162 Av. de l'UMA, Ariana</p>
+<p class="wp-block-paragraph">Tel: (+216) 51 556 886<br>Email: contact@evocare.example<br>https://www.evocare.example</p>
+<div><p>See also</p><p><a href="/other">Another list</a></p></div>
+<h3 class="wp-block-heading">Medizin Technik</h3>
+<p class="wp-block-paragraph">Route de Tunis km 2<br>Sfax 3099</p>
+<p class="wp-block-paragraph">Tel: +216 74 442 230<br>Mobile: +216 27 402 215<br>Email: m.ben[at]medizin.example<br>http://medizin.example</p>
+</div></article></main>
+<div id="right-sidebar"><div class="inside-right-sidebar">
+<aside class="widget"><h2 class="widget-title">News</h2><ul><li><a href="/a">A very long news headline about pharmacy courses in a faraway country</a></li><li><a href="/b">Another long headline about medicine prices and regulations this year</a></li><li><a href="/c">Third long headline about hospitals and clinics and doctors</a></li></ul></aside>
+<aside class="widget"><h2 class="widget-title">Topics</h2><ul><li><a href="/d">How to study pharmacy in a faraway country and what it costs</a></li><li><a href="/e">How to become a pharmacist and pass the national exams</a></li><li><a href="/f">Schools that offer pharmacy courses in the capital city</a></li></ul></aside>
+<aside class="widget"><h2 class="widget-title">Categories</h2><ul><li><a href="/g">Lists of manufacturers of oils, creams and medicines</a></li><li><a href="/h">Lists of distributors of medical devices and lab equipment</a></li><li><a href="/i">Lists of hospitals, clinics and diagnostic laboratories</a></li></ul></aside>
+</div></div>
+<div style="height:3000px"></div><div id="far">far down</div></div></body></html>"""
+
 _app = None
 
 
@@ -286,7 +316,7 @@ class PickerTests(unittest.TestCase):
         self.assertTrue(head["itemSelector"].endswith("div.entry-content h3.wp-block-heading"))
         self.assertEqual(head["selector"], ":scope > h3:nth-of-type(1)")
         contact = self.pick("list", "h3 + p + p", itemMode="sections", itemSelector=head["itemSelector"])
-        self.assertEqual(contact["labels"], ["Phone", "Email"])
+        self.assertEqual(contact["labels"], [{"name": "Phone", "label": "Phone"}, {"name": "Email", "label": "Email"}])
         address = self.pick("list", "h3 + p", itemMode="sections", itemSelector=head["itemSelector"])
         recipe = self.list_recipe(head["itemSelector"], Field("Name", head["selector"]), Field("Address", address["selector"]))
         recipe.item_mode = "sections"
@@ -301,6 +331,53 @@ class PickerTests(unittest.TestCase):
         recipe = self.list_recipe(res["itemSelector"], Field("Image", res["selector"], attr="src", type="image"))
         self.assertEqual([r["Image"] for r in extract_list(self.html, recipe, self.url)],
                          ["https://example.com/p/1.png", "https://example.com/p/2.png"])
+
+    def test_sections_beat_sidebar_and_labels_grouped(self):
+        self.load(SIDEBAR_SECTIONS, "https://example.com/tunisia/")
+        res = self.auto()
+        self.assertEqual((res["type"], res["itemMode"], res["items"]), ("auto", "sections", 5))
+        by_name = {f["name"]: f for f in res["fields"]}
+        self.assertEqual(list(by_name)[:2], ["Name", "Address"])
+        self.assertEqual(set(by_name["Phone"]["label"].split("|")), {"Phone", "Tel"})
+        self.assertIn("Email", by_name)
+        self.assertIn("Website", by_name)
+        fields = [Field(f["name"], label=f["label"]) if f.get("label") else
+                  Field(f["name"], f["selector"], attr=f.get("attr", "text"), type=f.get("type", "text"))
+                  for f in res["fields"]]
+        recipe = self.list_recipe(res["itemSelector"], *fields)
+        recipe.item_mode = "sections"
+        rows = extract_list(self.html, recipe, self.url)
+        self.assertEqual([r["Name"] for r in rows][:2], ["Agfa Tunisie", "Atomedical"])
+        self.assertEqual(rows[0]["Phone"], "+216 71 770 000, +216 71 770 309")  # second number kept
+        self.assertEqual(rows[2]["Phone"], "(+216) 54 471 830")
+        self.assertEqual(rows[0]["Website"], "http://www.agfa.example/")  # just the address, not the section
+        self.assertEqual(rows[4]["Email"], "m.ben[at]medizin.example")  # cleaned to @ at export
+
+    def test_chosen_list_type_is_respected(self):
+        self.load(SECTIONS, "https://example.com/suppliers/")
+        res = json.loads(self.js("JSON.stringify(window.__gleaner.autoDetect('list', 'sections'))"))
+        self.assertEqual(res["itemMode"], "sections")
+        self.load("<html><body><ul><li>a</li><li>b</li><li>c</li></ul></body></html>", "https://example.com/x")
+        res = json.loads(self.js("JSON.stringify(window.__gleaner.autoDetect('list', 'sections'))"))
+        self.assertEqual(res["type"], "error")
+
+    def test_show_scrolls_to_column(self):
+        self.load(SIDEBAR_SECTIONS.replace('<div class="site-content">',
+                                           '<div class="site-content"><div style="height:2500px"></div>'),
+                  "https://example.com/tunisia/")
+        head = "div.entry-content h3.wp-block-heading"
+        self.assertEqual(self.js(f"window.__gleaner.showSection({json.dumps(head)}, {{'label': 'Phone|Tel'}})"), 5)
+        self.assertEqual(self.js(f"window.__gleaner.showSection({json.dumps(head)}, {{'label': 'Mobile'}})"), 1)
+        self.assertEqual(self.js(f"window.__gleaner.showItem({json.dumps(head)}, 3, true)"), 1)
+        self.assertEqual(self.js("window.__gleaner.show('#nothing-here', 'b')"), 0)
+        self.js(f"window.__gleaner.showSection({json.dumps(head)}, {{'selector': ':scope > h3:nth-of-type(1)'}})")
+        scrolled = []
+        for _ in range(40):  # smooth scrolling takes a moment
+            scrolled.append(self.js("window.scrollY"))
+            if scrolled[-1] > 1000:
+                break
+            self._wait(lambda done: QTimer.singleShot(50, done))
+        self.assertGreater(scrolled[-1], 1000)
 
     # -- isolation -----------------------------------------------------------------------------
 

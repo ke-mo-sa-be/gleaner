@@ -121,5 +121,18 @@ class ExtractTests(unittest.TestCase):
         self.assertIsNone(next_page_url(LISTING, recipe(), "https://example.com/list", 1))
 
 
+class LabelLineTests(unittest.TestCase):
+    def test_alternatives_and_continuation(self):
+        from core.extract import label_line_value
+        lines = ["Phone: +216 71 770 000", "+216 71 770 309", "http://www.agfa.example/"]
+        self.assertEqual(label_line_value(lines, "Phone|Tel"), "+216 71 770 000, +216 71 770 309")
+        lines = ["Tel: +216 74 442 230", "Mobile: +216 27 402 215", "Email: a@x.example", "b@x.example"]
+        self.assertEqual(label_line_value(lines, "Phone|Tel"), "+216 74 442 230")
+        self.assertEqual(label_line_value(lines, "Mobile"), "+216 27 402 215")
+        self.assertEqual(label_line_value(lines, "Email"), "a@x.example, b@x.example")
+        self.assertEqual(label_line_value(["Address: 12 Rue,", "Tunis", "2035"], "Address"), "12 Rue, Tunis")
+        self.assertIsNone(label_line_value(["Fax: "], "Fax"))
+
+
 if __name__ == "__main__":
     unittest.main()

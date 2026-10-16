@@ -60,6 +60,27 @@
     });
   }
 
+  // Outline every match, scroll the first one into the middle of the view and flash it.
+  function focusOn(els) {
+    els = els.filter(Boolean);
+    highlight(els);
+    if (!els.length) return 0;
+    const first = els[0];
+    first.scrollIntoView({ block: "center", inline: "nearest", behavior: "smooth" });
+    const flash = box("#E67E22", false);
+    flash.style.borderWidth = "3px";
+    flash.style.transition = "opacity 0.6s ease";
+    place(flash, first);
+    highlights.push(flash);
+    let on = true;
+    const timer = setInterval(() => {
+      on = !on;
+      flash.style.opacity = on ? "1" : "0.15";
+    }, 350);
+    setTimeout(() => { clearInterval(timer); flash.style.opacity = "1"; }, 2200);
+    return els.length;
+  }
+
   // ---- selector building -------------------------------------------------------------------
 
   function goodClasses(el) {
@@ -266,6 +287,59 @@
     return out;
   }
 
+  // Different words for the same thing become one column: "Phone:" and "Tel:" both go to Phone.
+  const LABEL_GROUPS = [
+    ["Phone", /^(phone|phones|phone no\.?|phone number|tel|tel\.|tel no\.?|telephone|t[ée]l[ée]phone|ph|contact|contact no\.?|contact number|landline|t)$/i],
+    ["Mobile", /^(mobile|mob|mobile no\.?|mobile number|cell|cellphone|cell phone|gsm|whatsapp|m)$/i],
+    ["Fax", /^(fax|telefax|fax no\.?|f)$/i],
+    ["Email", /^(email|e-mail|e mail|mail|email address|courriel|e)$/i],
+    ["Website", /^(website|web site|web|site|url|www|homepage|w)$/i],
+  ];
+
+  function labelGroup(label) {
+    const clean = label.replace(/\s+/g, " ").trim();
+    const hit = LABEL_GROUPS.find(([, re]) => re.test(clean));
+    return hit ? hit[0] : clean;
+  }
+
+  // {name, label}: one column per group; label lists the words seen ("Phone|Tel"), as core/extract.py reads it.
+  function groupLabels(labels) {
+    const groups = new Map();
+    labels.forEach((lab) => {
+      const name = labelGroup(lab);
+      if (!groups.has(name)) groups.set(name, new Set());
+      groups.get(name).add(lab);
+    });
+    return [...groups].map(([name, alts]) => ({ name, label: [...alts].join("|") }));
+  }
+
+  function sectionLabelNode(nodes, label) {
+    const alts = label.split("|").map((a) => a.toLowerCase());
+    return nodes.find((n) => lines(n).some((line) => {
+      const m = line.match(LABEL_RE);
+      return m && alts.includes(m[1].trim().toLowerCase());
+    })) || null;
+  }
+
+  // The element a section field points at, e.g. ":scope > p:nth-of-type(2)" or a "Phone:" label.
+  function sectionTarget(head, headSel, field) {
+    const nodes = sectionNodes(head, headSel);
+    if (field.label) return sectionLabelNode(nodes.slice(1), field.label);
+    const sel = field.selector || ":scope";
+    if (sel === ":scope") return nodes.slice(1).find((n) => URL_TEXT.test(text(n))) || nodes[1] || head;
+    const m = sel.match(/^:scope > ([a-z0-9]+):nth-of-type\((\d+)\)\s*(.*)$/i);
+    if (m) {
+      const top = nodes.filter((n) => n.tagName === m[1].toUpperCase())[+m[2] - 1];
+      return top && m[3] ? top.querySelector(m[3]) : top || null;
+    }
+    for (const n of nodes) {
+      if (n.matches(sel)) return n;
+      const inner = n.querySelector(sel);
+      if (inner) return inner;
+    }
+    return null;
+  }
+
   function headingSelectorFor(head) {
     const chain = anchorChain(head, false);
     const same = [...head.parentElement.children].filter((x) => x.tagName === head.tagName);
@@ -292,7 +366,7 @@
     highlight([...document.querySelectorAll(headSel)]);
     return {
       type: mode, itemMode: "sections", itemSelector: headSel, selector: path.selector, steps: path.steps,
-      count, items: count, sample: text(target).slice(0, 80), labels: labelsIn(lines(target)),
+      count, items: count, sample: text(target).slice(0, 80), labels: groupLabels(labelsIn(lines(target))),
       attr: target.tagName === "IMG" ? "src" : "text", href: mode === "link" ? target.href : null,
     };
   }
@@ -301,7 +375,7 @@
     let best = null;
     const parents = new Set([...document.querySelectorAll("h2, h3, h4")].map((h) => h.parentElement));
     for (const parent of parents) {
-      if (!parent || (layer && layer.contains(parent)) || parent.closest("nav, header, footer")) continue;
+      if (!parent || (layer && layer.contains(parent)) || inChrome(parent)) continue;
       for (const tag of ["H2", "H3", "H4"]) {
         const heads = [...parent.children].filter((c) => c.tagName === tag);
         if (heads.length < 3) continue;
@@ -329,19 +403,21 @@
       fields.push({ selector: ":scope > p:nth-of-type(1)", steps: null, name: "Address",
                     samples: plain.slice(0, 3).map((nodes) => text(nodes.find((x) => x.tagName === "P")).slice(0, 80)) });
     }
+    // Labels grouped by meaning (Phone / Tel / Telephone -> Phone), counted once per section.
     const counts = new Map();
     sample.forEach((nodes) => {
       const seen = new Set();
       nodes.slice(1).forEach((node) => labelsIn(lines(node)).forEach((lab) => {
-        const key = lab.toLowerCase();
-        if (seen.has(key)) return;
-        seen.add(key);
-        if (!counts.has(key)) counts.set(key, { label: lab, n: 0 });
-        counts.get(key).n += 1;
+        const name = labelGroup(lab);
+        if (!counts.has(name)) counts.set(name, { name, alts: new Set(), n: 0 });
+        counts.get(name).alts.add(lab);
+        if (seen.has(name)) return;
+        seen.add(name);
+        counts.get(name).n += 1;
       }));
     });
-    [...counts.values()].filter((c) => c.n >= Math.max(2, Math.ceil(n * 0.4))).sort((a, b) => b.n - a.n).slice(0, 10)
-      .forEach((c) => fields.push({ label: c.label, name: c.label, samples: [], steps: null }));
+    [...counts.values()].filter((c) => c.n >= Math.max(2, Math.ceil(n * 0.3))).sort((a, b) => b.n - a.n).slice(0, 10)
+      .forEach((c) => fields.push({ label: [...c.alts].join("|"), name: c.name, samples: [], steps: null }));
     const withUrl = sample.filter((nodes) => nodes.slice(1).some((x) => URL_TEXT.test(text(x)))).length;
     if (withUrl >= Math.max(2, Math.ceil(n * 0.4)) && !fields.some((f) => /web|site|url/i.test(f.name))) {
       fields.push({ selector: ":scope", steps: null, name: "Website", type: "link", samples: [] });
@@ -367,6 +443,19 @@
   function leaves(item) {
     return [item, ...item.querySelectorAll("*")].filter(
       (el) => !NOT_FIELD_TAGS.has(el.tagName) && !el.closest("button") && ownText(el));
+  }
+
+  // Side bars, menus, footers, related-post boxes and comments: never the list the user wants. Classes on
+  // <body>/<html> ("right-sidebar" layouts) don't count.
+  const CHROME = "nav, header, footer, form, aside, [role=navigation], [role=menu], [role=complementary], " +
+    "[role=contentinfo], [id*=sidebar], [class*=sidebar], [id*=related], [class*=related], [id*=comments], " +
+    "[class*=comments], [class*=widget-area]";
+
+  function inChrome(el) {
+    for (let n = el; n && n !== document.body && n !== document.documentElement; n = n.parentElement) {
+      if (n.matches(CHROME)) return true;
+    }
+    return false;
   }
 
   // The repeated group of elements that looks most like a listing. Long runs of single short links
@@ -395,7 +484,7 @@
         const probeLeaves = probe.flatMap((it) => leaves(it));
         const linkShare = probeLeaves.length
           ? probeLeaves.filter((el) => el.closest("a")).length / probeLeaves.length : 0;
-        const inChrome = items[0].closest("nav, header, footer, form, [role=navigation], [role=menu]");
+        const chrome = inChrome(items[0]);
         // List items share their inner layout; page sections (div.row, panels) don't.
         const shapes = probe.map((it) => new Set(leaves(it).map((l) => relSteps(it, l).join(" "))));
         let similarity = 0;
@@ -406,7 +495,7 @@
         similarity = shapes.length > 1 ? similarity / (shapes.length - 1) : 0;
         const tooBig = leafAvg > 25 || avg > 1500;
         const score = Math.sqrt(withText.length) * Math.min(avg, 300) * Math.min(leafAvg, 8) ** 2
-          * similarity ** 2 * (linkShare > 0.8 ? 0.05 : 1) * (inChrome ? 0.05 : 1) * (tooBig ? 0.1 : 1);
+          * similarity ** 2 * (linkShare > 0.8 ? 0.05 : 1) * (chrome ? 0.05 : 1) * (tooBig ? 0.1 : 1);
         if (!best || score > best.score) best = { items: withText, score };
       }
     }
@@ -550,9 +639,15 @@
       : { type: "error", message: "Couldn't find label and value pairs on this page. Pick the values by hand." };
   }
 
-  function autoDetect(kind) {
+  function autoDetect(kind, itemMode) {
     try {
       if (kind === "detail") return autoDetail();
+      if (itemMode === "sections") {  // the user chose "Headings with text below": only look for that
+        const only = autoSections();
+        if (!only) return { type: "error", message: "Couldn't find headings with text below them. Pick the heading and fields by hand." };
+        highlight([...document.querySelectorAll(only.itemSelector)]);
+        return only;
+      }
       const list = autoList();
       const secs = autoSections();
       if (secs && (list.type !== "auto" || secs.score > list.score)) {
@@ -655,17 +750,55 @@
     autoDetect,
     show(itemSelector, selector) {
       try {
-        highlight(selector === undefined ? [...document.querySelectorAll(itemSelector)] : matchesFor(itemSelector, selector));
+        return focusOn(selector === undefined || selector === null ? [...document.querySelectorAll(itemSelector)]
+          : matchesFor(itemSelector, selector));
       } catch (err) {
         clearHighlights();
+        return 0;
+      }
+    },
+    // A column of a heading list: its value in every section.
+    showSection(headSel, field) {
+      try {
+        return focusOn([...document.querySelectorAll(headSel)].map((h) => sectionTarget(h, headSel, field)));
+      } catch (err) {
+        clearHighlights();
+        return 0;
       }
     },
     showOne(selector) {
       try {
-        const el = document.querySelector(selector);
-        highlight(el ? [el] : []);
+        return focusOn([document.querySelector(selector)]);
       } catch (err) {
         clearHighlights();
+        return 0;
+      }
+    },
+    // An item-page value found by its label ("Phone Number" in a table row): the cell after the label.
+    showLabel(label, scope) {
+      try {
+        const want = label.replace(/\s+/g, " ").trim().toLowerCase();
+        const row = [...document.querySelectorAll(scope)].find((r) => r.children.length >= 2
+          && text(r.children[0]).replace(/\s+/g, " ").trim().toLowerCase() === want);
+        return focusOn([row ? row.children[1] : null]);
+      } catch (err) {
+        clearHighlights();
+        return 0;
+      }
+    },
+    // One item of the list (a preview row): the whole item, or the heading's section.
+    showItem(itemSelector, index, sections) {
+      try {
+        const item = document.querySelectorAll(itemSelector)[index];
+        if (!item) return 0;
+        if (!sections) return focusOn([item]);
+        const nodes = sectionNodes(item, itemSelector);
+        focusOn([item]);
+        nodes.slice(1).forEach((n) => { const d = box("#F39C12", false); place(d, n); highlights.push(d); });
+        return 1;
+      } catch (err) {
+        clearHighlights();
+        return 0;
       }
     },
     clear: clearHighlights,
