@@ -18,6 +18,7 @@ products, members, professionals, ...) into clean Excel files, politely and safe
 
 Full history: [CHANGELOG.md](CHANGELOG.md).
 
+- v0.9: Ad remover, Update now (verified in-app update), columns shown on the page, better heading lists.
 - v0.8: Cleaner, modern UI; step-based Recipe builder (List, Item page, More pages); simpler Library.
 - v0.7: Sites that build their list with JavaScript (runs open pages in Gleaner's browser), collapsible
   sidebar, theme button on every screen.
@@ -28,7 +29,7 @@ Full history: [CHANGELOG.md](CHANGELOG.md).
 - v0.4: engine (recipes, polite fetcher, extraction, resumable runner, cleanup, Excel export); desktop app
   (Library, point-and-click Recipe builder, Run with speed choice, Guide, Settings with light/dark theme and
   update check); Windows installer.
-- 109 automated tests including offscreen UI tests.
+- 123 automated tests including offscreen UI tests.
 - Next: see "Future" in [docs/PRD.md](docs/PRD.md) section 8.
 
 ## Setup
